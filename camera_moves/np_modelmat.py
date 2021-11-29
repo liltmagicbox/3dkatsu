@@ -71,8 +71,6 @@ def mrot(axis,deg):
         return mrotz(deg)#for now..hehe
 
 
-
-
 #---rotation for Z, Y, Z axis.
 def mrotz(deg):
     """turn. rh, in:deg.
@@ -116,7 +114,7 @@ if __name__ == '__main__':
     target = vpos(5,0,0)
     P = mtrans(10,10)
     R = mrot((0,0,1), 30)
-    S = mscale(3)
+    S = mscale(3)    
     end = multi_dot( (P,R,S,target) )
     print(end)
     #[22.990381 17.5       0.        1.      ]
@@ -128,6 +126,9 @@ if __name__ == '__main__':
 # eye xyz, at xyz, up xyz.
 #lookat means , world to view trans.
 #...actually glulookat is for cam. maybe deprecated..ha.
+
+
+
 
 def mview(eye,target,upV):
     """input each vector..4! no tuple."""
@@ -160,36 +161,94 @@ def mview(eye,target,upV):
 def mview_rotation(eye,target,upV):
     """input each vector..4! no tuple."""
     front = target - eye
-    right = np.cross( front, upV)
-    up = upV
     front = front/np.linalg.norm(front)
+
+    right = np.cross(front, upV)
     right = right/np.linalg.norm(right)
-    up = up/np.linalg.norm(up)
+
+    up = np.cross(right , front)
+    
+    #print(front,right,up,'isnorm')
+
+    #slower 30% since /norm.
+    #front = front/np.linalg.norm(front)
+    #right = right/np.linalg.norm(right)
+    #up = up/np.linalg.norm(up)
+    
     
     view1 = [[right[0],right[1],right[2],0],
     [up[0],up[1],up[2],0],
     [front[0],front[1],front[2],0],
     [0,0,0,1]]
-    
-    view1 = np.array(view1,dtype='float32')
-    return view1
 
-def mview_translate(eye,target,upV):
+    # view1 = [
+    # [right[0],up[1],front[2],0],
+    # [right[0],up[1],front[2],0],
+    # [right[0],up[1],front[2],0],
+    # [0,0,0,1]] 
+    
+    return np.array(view1,dtype='float32')
+#https://www.3dgep.com/understanding-the-view-matrix/
+#optimize v@v
+
+
+def mview_col(eye,target,upV):
     """input each vector..4! no tuple."""
     front = target - eye
-    view2 = eye4()
-    view2[0][3] = eye[0]
-    view2[1][3] = eye[1]
-    view2[2][3] = eye[2]
+    front = front/np.linalg.norm(front)
+
+    right = np.cross(upV, front)
+    right = right/np.linalg.norm(right)
+
+    up = np.cross(front, right)
+    up = up/np.linalg.norm(up)
+    
+    view1 = [
+    [right[0],right[1],right[2],0],
+    [up[0],up[1],up[2],0],
+    [front[0],front[1],front[2],0],
+    [0,0,0,1]]
+    
+    return np.array(view1,dtype='float32')
+
+def mview_translate(eye,target,upV):
+    """input each vector..4! no tuple."""   
+    view2 = eye4()    
+    view2[0][3] = -eye[0]
+    view2[1][3] = -eye[1]
+    view2[2][3] = -eye[2]
     return np.array( view2, dtype='float32')
 
-eye = vpos3(3,0,0)
+
+eye = vpos3(3,0,1)
 target = vpos3(0,0,0)
 upV = vpos3(0,1,0)
-vv = mview(eye,target,upV)
-print(vv)
-po = vpos(1,0,0)
-print(vv.dot(po))
+
+
+eye = vpos3(2,0,0)
+#eye = vpos3(cam.x,cam.y,cam.z)
+target = vpos3(0,0,0)
+upV = vpos3(0,1,0)
+
+
+#rotv = mview_rotation(eye,target,upV)
+rotv = mview_col(eye,target,upV)
+transv = mview_translate(eye,target,upV)
+print('rototo')
+print(eye,target,upV)
+
+print(rotv,'rot')
+print(transv,'tr')
+
+
+#print(mview_rotation(eye,target,upV))
+#print(mview_translate(eye,target,upV))
+
+
+#vv = mview(eye,target,upV)
+#print(vv)
+#po = vpos(1,0,0)
+#print(vv.dot(po))
 
 
 
@@ -213,7 +272,7 @@ def mortho(left, right, bottom, top, near, far):
     ortho[2][2] = -2 / (far - near)
     ortho[0][3] = tx
     ortho[1][3] = ty
-    ortho[2][3] = tz
+    ortho[2][3] = tz        
     return ortho
 
 
