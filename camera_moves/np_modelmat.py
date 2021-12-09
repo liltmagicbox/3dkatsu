@@ -1,5 +1,8 @@
 import numpy as np
-from numpy.linalg import multi_dot
+from numpy import array, eye
+from numpy import radians, sin,cos,arccos,tan
+from numpy import cross
+from numpy.linalg import multi_dot, norm
 
 #FOR COLUMB MAJOR ONLY!!!!
 # [Rx Ry Rz -Px] for 4x4 viewmat.
@@ -47,34 +50,37 @@ from argsparse import argsparse3
 
 #--- basic eye 4x4.
 def eye4():
-    return np.eye(4,dtype='float32')
+    return eye(4,dtype='float32')
 
 #--- vector 4x1 returns
 def vpos(*args):
     """ in:x, xy, xyz, (xyz) out:xyz1
     """
     x,y,z = argsparse3(args)
-    return np.array( [ x,y,z,1] , dtype = 'float32')
+    return array( [ x,y,z,1] , dtype = 'float32')
 
 def vdir(*args):
     """ in:x, xy, xyz, (xyz) out:xyz0
     """
     x,y,z = argsparse3(args)
-    return np.array( [ x,y,z,0] , dtype = 'float32')
+    return array( [ x,y,z,0] , dtype = 'float32')
 
 def vec3(*args):
     """ in:x, xy, xyz, (xyz) out:xyz
     """
     x,y,z = argsparse3(args)
-    #return np.array( [ x,y,z] , dtype = 'float32')
+    #return array( [ x,y,z] , dtype = 'float32')
     return npVector(x,y,z)
 
 def vpos3(*args):
     """deprecated use vec3
     """
     x,y,z = argsparse3(args)
-    #return np.array( [ x,y,z] , dtype = 'float32')
+    #return array( [ x,y,z] , dtype = 'float32')
     return npVector(x,y,z)
+
+def vcopy3(vec3):
+    return vec3.copy()
 
 #wonder but copy copys npV not ndarray..
 # a = vec3(0,0,0)
@@ -84,6 +90,13 @@ def vpos3(*args):
 # print(a, type(a))
 # print(b, type(b))
 # print(' copy returns npVector, not ndarray! ')
+
+
+def normalize(vec):
+    norms = norm(vec)
+    if not norms == 0:
+        return vec/norms
+    return vec
 
 
 
@@ -112,19 +125,95 @@ def mscale(*args):
     mat[2][2] = Sz
     return mat
 
-def mrot(axis,deg):
-    """ in:axis (x,y,z) ,deg out:mat4 rotation [[Rx0,rx1,rx2,rx3]
+#----------is for the quaternion.
+def mrot(axis,th):
+    """ axis = vec3.. not normed. we use radians for th, not deg.
+    in:axis (x,y,z) ,th out:mat4 rotation [[Rx0,rx1,rx2,rx3]
+    q = [qv , qs]
+    qv = a *sin(th/2)
+    qs = cos(th/2)
     """
-    xyz = argsparse3(axis)
-    if xyz == (0,0,1):#z axis
-        return mrotz(deg)
-    elif xyz == (0,1,0):#y axis
-        return mroty(deg)
-    elif xyz == (1,0,0):#x axis
-        return mrotx(deg)
+    #qx, qy, qz, qw = argsparse3(axis), th
+    #if norm(axis) == 0:
+        #return eye4()
+    #try:#ASSUMES ONLY ERROR COMES FROM DIV/0. ---- gui collects all error !
+    axis = normalize(axis)
+    qx,qy,qz = axis *sin(th/2) #qv
+    qw = cos(th/2) #qs
+    #print( norm((qx,qy,qz,qw))) for unit quat.
 
-    else:#means custom-axis : quaternion!
-        return mrotz(deg)#for now..hehe
+    #https://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToMatrix/index.htm
+    quat = [
+    [1 - 2*qy**2 - 2*qz**2,   2*qx*qy - 2*qz*qw,   2*qx*qz + 2*qy*qw, 0],
+    [2*qx*qy + 2*qz*qw,   1 - 2*qx**2 - 2*qz**2,   2*qy*qz - 2*qx*qw, 0],
+    [2*qx*qz - 2*qy*qw,   2*qy*qz + 2*qx*qw,   1 - 2*qx**2 - 2*qy**2, 0],
+    [0,0,0,1]
+    ]
+    return array(quat,dtype='float32')
+
+#print(0==norm(vec3(0,0,0)),'hm')
+#a=mrot(vec3(0,0,0),1) #seems rh.fine. seems working.
+#print(a)
+
+#-----when Missile.. facing also requires normalized.
+#print(axis,th)[nan nan nan] [0.        1.5707964 1.5707964]
+#front =  vec3([-0.6113929  , 0.02094242  ,0.79105   ])
+#facing = vec3([35.69067   , -0.30694106 , 8.406034  ] )
+    
+def mrotv(front,facing):
+    """return 4x4 rot v1 to v2.
+    """
+    #---check if qv same dir front
+    #if front == facing: #or use vec3same() kinds??
+    #    return eye4()
+    #we check at mrot.
+
+    #---qv
+    axis = cross(front, facing)    
+    axis = normalize(axis)
+    #---qs
+    
+    #front = normalize(front)
+    facing = normalize(facing)
+    th = arccos( front.dot(facing) )
+    return mrot(axis,th)
+
+#mrotv(front,facing)
+
+
+# front = 
+# pos
+# target
+
+# #---qv
+# dist = target-pos
+# facing = dist/norm(dist) #similier to front
+# axis = cross(front, facing)
+# axis = axis/norm(axis)
+# #---qs
+# th = arccos(front, facing)
+# #---check if qv same dir front
+# #...
+# rotmat = mrot(axis,deg)
+     
+
+
+def mrotxyz(xyztuple):
+    """x-roll, y-pitch, z-yaw. imagine x-front plane.
+    roll > pitch > yaw guarantees model.
+    if yup, use instead mrotxZY,  using import mrotxzy as mrotxyz.
+    """
+    x,y,z = xyztuple
+    return mrotz(z)@mroty(y)@mrotx(x) #see x y z
+
+def mrotxzy(xyztuple):
+    """ y up version. opengl-friendly.
+    x-roll, y-pitch, z-yaw. imagine x-front plane.
+    roll > pitch > yaw guarantees model.
+    if yup, use instead mrotxZY,  using import mrotxzy as mrotxyz.
+    """
+    x,y,z = xyztuple
+    return mroty(y)@mrotz(z)@mrotx(x) #see x z y
 
 
 #---rotation for Z, Y, Z axis. .. since we want 3d.. zup
@@ -132,9 +221,9 @@ def mrotz(deg):
     """turn. rh, in:deg.
     """
     mat = eye4()
-    deg = np.radians(deg)
-    C = np.cos(deg)
-    S = np.sin(deg)
+    deg = radians(deg)
+    C = cos(deg)
+    S = sin(deg)
     mat[0][0] = C
     mat[0][1] = -S
     mat[1][0] = S
@@ -144,9 +233,9 @@ def mroty(deg):
     """yaw. head up or down..
     """
     mat = eye4()
-    deg = np.radians(deg)
-    C = np.cos(deg)
-    S = np.sin(deg)    
+    deg = radians(deg)
+    C = cos(deg)
+    S = sin(deg)    
     mat[0][0] = C
     mat[0][2] = S
     mat[2][0] = -S#-
@@ -156,9 +245,9 @@ def mrotx(deg):
     """roll
     """
     mat = eye4()
-    deg = np.radians(deg)
-    C = np.cos(deg)
-    S = np.sin(deg)
+    deg = radians(deg)
+    C = cos(deg)
+    S = sin(deg)
     mat[1][1] = C
     mat[1][2] = -S
     mat[2][1] = S
@@ -203,13 +292,13 @@ def rotate_y(vector,degree):
 def mlookat(eye,target,upV):
     """input each vector..4! no tuple."""
     front = eye-target#donno why but this way.fine. we have lot to do.
-    front = front/np.linalg.norm(front)
+    front = front/norm(front)
 
-    right = np.cross(upV, front)
-    right = right/np.linalg.norm(right)
+    right = cross(upV, front)
+    right = right/norm(right)
 
-    up = np.cross(front, right)
-    up = up/np.linalg.norm(up)
+    up = cross(front, right)
+    up = up/norm(up)
     
     view1 = [
     [right[0],right[1],right[2],0],
@@ -217,13 +306,13 @@ def mlookat(eye,target,upV):
     [front[0],front[1],front[2],0],
     [0,0,0,1]]
     
-    v1 =  np.array(view1,dtype='float32')
+    v1 =  array(view1,dtype='float32')
 
     view2 = eye4()    
     view2[0][3] = -eye[0]
     view2[1][3] = -eye[1]
     view2[2][3] = -eye[2]
-    v2 = np.array( view2, dtype='float32')
+    v2 = array( view2, dtype='float32')
 
     return v1@v2
 
@@ -259,10 +348,10 @@ def mortho(left, right, bottom, top, near, far):
 
 
 def mperspective(fov, asfect, near, far):
-    fov = np.radians(fov)
+    fov = radians(fov)
     ortho = eye4()
 
-    f= 1/ np.tan(fov/2)
+    f= 1/ tan(fov/2)
     
     head = f/asfect
     body = f
@@ -305,7 +394,7 @@ def mviewport(left,bottom,width,height):
     [0, 0, 0.5, 0.5],#0.5 better 1/2
     [0, 0, 0, 1],
     ]
-    np.array(mat,dtype='float32')
+    array(mat,dtype='float32')
     return mat
 
 
@@ -393,13 +482,13 @@ def mviewport(left,bottom,width,height):
 # def mview_rotation(eye,target,upV):
 #     """input each vector..4! no tuple."""
 #     front = target - eye
-#     front = front/np.linalg.norm(front)
+#     front = front/norm(front)
 
-#     right = np.cross(upV, front)
-#     right = right/np.linalg.norm(right)
+#     right = cross(upV, front)
+#     right = right/norm(right)
 
-#     up = np.cross(front, right)
-#     up = up/np.linalg.norm(up)
+#     up = cross(front, right)
+#     up = up/norm(up)
     
 #     view1 = [
 #     [right[0],right[1],right[2],0],

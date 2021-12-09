@@ -9,7 +9,6 @@ def solver(*args):
     #3 means 3 value...
     
     #typeint = type(1) define it outside of def..
-
     if len(args) == 1:
         if type(args[0]) == type(1):#means a int.
             x = args[0]
@@ -62,6 +61,9 @@ def argsparse(*args):
         return x,y,z
 
 def argsparse3(tup):
+    if len(tup) == 0:
+        return 0,0,0
+    
     if len(tup) == 1:
         if type(tup[0]) == type(1):#means a int.
             x = tup[0]            
@@ -74,6 +76,9 @@ def argsparse3(tup):
         return x,y,0
     elif len(tup) == 3:
         x,y,z = tup
+        return x,y,z
+    elif len(tup) == 4:# pos to vec3..
+        x,y,z,w = tup
         return x,y,z
 
 

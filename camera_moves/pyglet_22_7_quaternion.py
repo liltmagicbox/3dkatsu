@@ -112,8 +112,11 @@ def loadobj_return_vlist_texture(objname):
 
 
 import numpy as np
-from np_modelmat import vec3,vpos,eye4,  mlookat,mortho,mperspective, mtrans,mscale, mrot,mrotxyz
-import np_modelmat
+from np_modelmat import vec3,vpos,vdir,eye4,vcopy3,normalize
+from np_modelmat import mlookat,mortho,mperspective, mtrans,mscale, mrot, mrotv
+from np_modelmat import mrotxzy as mrotxyz # for yup!
+#from np_modelmat import vcopy3 #for replace .copy() and vec3(front) . 
+#import np_modelmat
 
 
 
@@ -133,7 +136,7 @@ class Gameworld:
         
         self.actor_dict = {}
         #self.shader_id_list = [] gone pure var. like world itself.
-    def front_copy(self):
+    def front_copy(self): #do we need it? .,. yeah if you not use ndarray more..
         return self.front.copy()
     def up_copy(self):
         return self.up.copy()
@@ -223,14 +226,19 @@ class Actor:
         #self.right = vec3(0,-1,0) we calc when we want.
         self.up = world.up_copy() # yup..yeah..
 
+        #---check if we need re-calculate rotmat. ..is it badway for steady fps? --but for maxfps!
+        self.front_before = vcopy3(self.front) #if glm, it may not work. .. better than vec3(front)
+
         self.isgravity = False
         self.gravity_factor = 9.8 #if worldglobal, there will no be floting mascote..
 
         self.mesh_list = [] # a mesh is just [vbo, [textures]]
 
         self.scale = 1
-        self.qv = vec3(0,0,0)
-        self.qs = 1
+        
+        #---instant make 4x4 by front-up. just save 4x4rotmat for save time.
+        #self.qv = vec3(0,0,0)
+        #self.qs = 1
         self.rotxyz = 0,0,0#plane tuple. use actor.rotxyz[0] kinds.
 
         #self.name = 'actor' #actor_get_name('plane1')
@@ -269,8 +277,17 @@ class Actor:
         self.mesh_list.append(mesh)
 
     def get_matrix_model(self):
-        mmodel = eye4()
-        mmodel = mtrans(self.pos)@mrot(self.qv,self,qs)@mrotxyz(self.rotxyz)@mscale(self.scale)@mmodel
+        #if not self.front == self.front_before:#need update self.rotmat
+
+        #rh rule, frontXup = right.
+        #right = np.cross(self.front , self.up)
+        
+        #worldrot = mrotv(world.front, self.front)#SO SIMPLE FINE
+        worldrot = mrotv(vec3(1,0,0), self.front)#
+
+        #mmodel = eye4()
+        #mmodel = mtrans(self.pos)@worldrot@mrotxyz(self.rotxyz)@mscale(self.scale)@mmodel
+        mmodel = mtrans(self.pos)@worldrot@mrotxyz(self.rotxyz)@mscale(self.scale)
         return mmodel
 
 
@@ -465,12 +482,16 @@ class Camera(Actor):
 
 
 class Projectile(Actor):
-    def __init__(self, target = None):
+    """ fired, flying object. without target.
+    """
+    def __init__(self, isgravity = False ):
+        """ use_velocity :True_ velocity*front. False_  ..need better name..
+        """
         super().__init__()#maybe it's ok..
         
         #---below self.
-        self.isgravity = False
-        self.speed = vec3(5,0,0)
+        self.isgravity = isgravity
+        #self.speed = vec3(5,0,0)
 
         #self.front = vec3(0,0,-1)
         #self.pos = vec3()
@@ -480,8 +501,6 @@ class Projectile(Actor):
 
         #self.mesh_list = [] # a mesh is just [
 
-        if target:
-            self.target = target#that's all here.fine.
     def update(self,dt):
         super().update(dt)
 
@@ -496,6 +515,45 @@ class Projectile(Actor):
     #     if symbol == key.W:
     #         self.move_front(1)
     #     if symbol == key.S:
+
+
+
+
+
+class Missile(Actor):
+    """ missile that has target. speed= velocity*front.
+    """
+    def __init__(self, target = None, velocity = 0, isgravity = False):
+        """ use_velocity :True_ velocity*front. False_  ..need better name..
+        """
+        super().__init__()#maybe it's ok..
+        
+        #---below self.
+        self.isgravity = isgravity
+        #self.front = vec3(0,0,-1)
+        #self.pos = vec3()
+        #self.speed_factor = 10 #once it was 100000, float uncertainty occured.ha.
+
+        #self.up = world.up_copy() # yup..yeah..
+
+        #self.mesh_list = [] # a mesh is just [
+
+        self.target = target#that's all here.fine.
+        self.velocity = velocity
+
+    def update(self,dt):
+        super().update(dt)
+
+        #------trace
+        if self.target:
+            facing = self.target.pos - self.pos
+            front = self.front
+            d = vdir(front)
+            m = mrotv(front,facing)
+            new_front = normalize(m@d)
+            self.speed = self.velocity*self.front
+            self.front = vec3(new_front)
+
 
 #=====================================OBJECTS
 
@@ -594,9 +652,12 @@ grass.mesh_add(grassmesh)
 grass.pos = vec3(-250,-88,-250)
 world.actor_add(grass)
 grass.scale = 500
-grass.rotx = 90 #this is local
-#grass.qv = vec3(grass.front) #this is global
+
+#grass.rotx = 90 #this is local
+#grass.qv = vec3(grass.front) #this is global  ---after, we auto calculate. we not store quat on actor!
 #grass.qs = 1.5
+grass.rotxyz = 90,0,0
+
 #mrotx(30)@grass
 cam.far = 1000
 #===============================ground works great
@@ -766,7 +827,7 @@ class Controller:
         self.mouse_value.x += dx
         self.mouse_value.y += dy
     def on_mouse_press(self, x, y, button, modifiers):
-        fire(cam)        
+        fire(cam, target = world.actor_get('peach777') )
 
     def on_key_press(self, symbol,modifiers):
         for actor in world.actor_all():
@@ -799,20 +860,21 @@ def drop(parent, target=None):
     direction = parent.front #---now , front dose not match the speed of parent.
     firespeed = 10 * direction
     bullet.speed = firespeed
-    #bullet.speed = vec3(parent.speed + firespeed) #when plane fires missile..
-    bullet.speed = vec3(parent.speed)
+    #bullet.speed = vcopy3(parent.speed + firespeed) #when plane fires missile..
+    
+    bullet.speed = vcopy3(parent.speed)# IT's slow!!! use vcopy3 instead.  vv.copy() is too np-related.
 
     #---this actually locks bullet position to camera position lol
     #--- we need copy(vec3) kinds.
     #bullet.pos = parent.pos
-    bullet.pos = vec3(parent.pos) #wonderful!
+    bullet.pos = vcopy3(parent.pos) #wonderful!
 
     #---- rotate via front. prevent sidewalk..
     #we have, model's current(default)front.
     #and we have cam=parent's front,
     #and rotate a to b. thats all.
     #means, actually, rotate to self.front.
-    bullet.front = vec3(parent.front)
+    bullet.front = vcopy3(parent.front)
     #and later automatically via model = rot trnas scale kinds..
 
     world.actor_add(bullet)
@@ -820,7 +882,7 @@ def drop(parent, target=None):
 
 #---was it realtime loading??? hopefully cache..
 def fire(parent, target=None):
-    bullet = Projectile(target)#that's all we need to track object. beautiful.
+    bullet = Missile(target, velocity = 50)#that's all we need to track object. beautiful.
     
     objname = 'resources/peng/peng.obj'
     vlist1 , texture1 = loadobj_return_vlist_texture(objname)
@@ -828,23 +890,43 @@ def fire(parent, target=None):
     bullet.mesh_add(grassmesh)
 
     #----parent front became bullet's direction.
-    direction = parent.front
-    firespeed = 50 * direction
-    bullet.speed = firespeed
-    #bullet.speed = vec3(parent.speed + firespeed) #when plane fires missile..
+    
 
     #---this actually locks bullet position to camera position lol
     #--- we need copy(vec3) kinds.
     #bullet.pos = parent.pos
-    bullet.pos = vec3(parent.pos) #wonderful!
+    bullet.pos = vcopy3(parent.pos) #wonderful!
 
     #---- rotate via front. prevent sidewalk..
     #we have, model's current(default)front.
     #and we have cam=parent's front,
     #and rotate a to b. thats all.
     #means, actually, rotate to self.front.
-    bullet.front = vec3(parent.front)
+    
+    #bullet.front = vcopy3(world.front)
+    #print('camfront',parent.front)
+    #bullet.front = vcopy3(world.front) #we use export obj: yup, -z forward(depth). as you imagine plane..
+    bullet.front = vcopy3(parent.front) #so it's so. at last.
+
     #and later automatically via model = rot trnas scale kinds..
+
+    #position, rotation and finally speed. moved here.
+    #speed, we have velocity via front..?
+    #or just additianoal acc for front..?
+    #then what happens when front changed?
+    #--1. pos and speed seperated.
+    #--2. acc..need. via front direction.
+    #--3. a missile have 0 of initial velocity, accs to front. fine.
+    #--4. when front changes, acc added. but remained speed..making bigger round curve.
+
+    #-=----OR simply velocity multiplied front haha. we can have this model since too little calc.
+    #--yeah do it first.
+    #- speed*future is the tracking line.
+
+    #direction = parent.front
+    #firespeed = 50
+    #bullet.velocity = firespeed
+    #bullet.speed = vec3(parent.speed + firespeed) #when plane fires missile..
 
     world.actor_add(bullet)
 
