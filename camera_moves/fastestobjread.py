@@ -8,7 +8,7 @@ from os.path import join, split
 #https://github.com/yarolig/OBJFileLoader/blob/master/OBJFileLoader/objloader.py
 
 class OBJ:
-    def __init__(self,filename):
+    def __init__(self,filename):        
         self.idxs = []
         self.multices = []
         
@@ -85,7 +85,8 @@ class OBJ:
                         self.idxs.append(index)
             counter+=1
             if counter%1000 == 1:
-                print('k',end='')
+                1
+                #print('k',end='')
 
                 # face = {
                 # 'material':material,
