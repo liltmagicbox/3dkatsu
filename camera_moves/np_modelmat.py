@@ -168,13 +168,16 @@ def mrotv(front,facing):
     #    return eye4()
     #we check at mrot.
 
+    front = normalize(front)
+    facing = normalize(facing)
+    
     #---qv
-    axis = cross(front, facing)    
+    axis = cross(front, facing)#is not unit vector
     axis = normalize(axis)
     #---qs
     
     #front = normalize(front)
-    facing = normalize(facing)
+    #print(front,facing, front.dot(facing) )[nan nan nan] [nan nan nan] nan
     th = arccos( front.dot(facing) )
     return mrot(axis,th)
 

@@ -170,8 +170,9 @@ class Gameworld:
     def actor_get(self, name, i=None):#name automatically Class_0 or named.
         """ name for actor.name. // if i, returns actor_dict[name][i]
         """
-        if i: # 0=>True.
-            return self.actor_dict[name][i]
+        if not i == None: # 0=>True. .. not worked. changed from if i:
+            #return self.actor_dict[name][i]
+            return self.actor_dict.get(name,[None])[i] #i love it.
         #return self.actor_dict[name][-1]
         
         #---it complexed. fine. cost- kind thing..
@@ -551,8 +552,11 @@ class Missile(Actor):
             d = vdir(front)
             m = mrotv(front,facing)
             new_front = normalize(m@d)
+            self.front = vec3(new_front)            
+            #self.front = self.front*dt*0.9 +vec3(new_front)*dt*0.1 we dont do this. do slerp..
+            
             self.speed = self.velocity*self.front
-            self.front = vec3(new_front)
+            
 
 
 #=====================================OBJECTS
@@ -827,7 +831,17 @@ class Controller:
         self.mouse_value.x += dx
         self.mouse_value.y += dy
     def on_mouse_press(self, x, y, button, modifiers):
-        fire(cam, target = world.actor_get('peach777') )
+        #print(button) #1 2 4 
+        if button == 1:
+            fire(cam, target = world.actor_get('peach777') )
+        if button == 4:
+            #missile = world.actor_get('Missile',0)
+            for missile in world.actor_dict['Missile']:#this brings error, not good.
+                if missile.target == None:
+                    missile.target = world.actor_get('peach777')
+                else:
+                    missile.target = None
+
 
     def on_key_press(self, symbol,modifiers):
         for actor in world.actor_all():
