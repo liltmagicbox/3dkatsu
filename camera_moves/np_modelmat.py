@@ -1,12 +1,47 @@
 import numpy as np
 from numpy.linalg import multi_dot
 
+#FOR COLUMB MAJOR ONLY!!!!
+# [Rx Ry Rz -Px] for 4x4 viewmat.
+
+#pos4 only 1x4 for fast indexing.
+
+
 #npmat3d is not used in online. i use it. haha.
 #numpy matrix for 3d.
 
 
 #------actually all 3d space. import 2d targeted .py instead!
 # 3d location : npmat3d.pos = v4 x,y,z,w=1,  3d direction : position()
+
+class npVector(np.ndarray):
+    def __new__(subtype, x,y,z ):
+        obj = super().__new__(subtype, shape=(3,), dtype='float32', buffer=None, offset=0,
+                strides=None, order=None)
+
+        obj[0],obj[1],obj[2] = x,y,z
+        obj.x, obj.y, obj.z = x,y,z
+        return obj
+
+    def __getattribute__(self,name):
+        if name == 'x':
+            return self[0]#finally!
+            #return self.x max recur..
+        elif name == 'y':
+            return self[1]
+        elif name == 'z':
+            return self[2]
+        return super().__getattribute__(name)
+
+    def __setattr__(self, name, value):
+        if name == 'x':
+            self[0] = value
+        elif name == 'y':
+            self[1] = value
+        elif name == 'z':
+            self[2] = value
+        super().__setattr__(name, value)
+
 
 from argsparse import argsparse3
 
@@ -27,11 +62,30 @@ def vdir(*args):
     x,y,z = argsparse3(args)
     return np.array( [ x,y,z,0] , dtype = 'float32')
 
-def vpos3(*args):
+def vec3(*args):
     """ in:x, xy, xyz, (xyz) out:xyz
     """
     x,y,z = argsparse3(args)
-    return np.array( [ x,y,z] , dtype = 'float32')
+    #return np.array( [ x,y,z] , dtype = 'float32')
+    return npVector(x,y,z)
+
+def vpos3(*args):
+    """deprecated use vec3
+    """
+    x,y,z = argsparse3(args)
+    #return np.array( [ x,y,z] , dtype = 'float32')
+    return npVector(x,y,z)
+
+#wonder but copy copys npV not ndarray..
+# a = vec3(0,0,0)
+# b = a.copy()
+# a.x=55
+# b.y=33
+# print(a, type(a))
+# print(b, type(b))
+# print(' copy returns npVector, not ndarray! ')
+
+
 
 #--- matrix 4x4 returns
 def mtrans(*args):
@@ -48,13 +102,15 @@ def mtrans(*args):
 def mscale(*args):
     """ in:x, xy, xyz, (xyz) out:mat4 scale 1,0,0,Sx
     """
-    Sx,Sy,Sz = argsparse3(args)
+    if len(args) == 1:#for scale only. it's temporal, not great way..
+        Sx,Sy,Sz = args[0],args[0],args[0]        
+    else:
+        Sx,Sy,Sz = argsparse3(args)
     mat = eye4()
     mat[0][0] = Sx
     mat[1][1] = Sy
     mat[2][2] = Sz
     return mat
-
 
 def mrot(axis,deg):
     """ in:axis (x,y,z) ,deg out:mat4 rotation [[Rx0,rx1,rx2,rx3]
@@ -71,7 +127,7 @@ def mrot(axis,deg):
         return mrotz(deg)#for now..hehe
 
 
-#---rotation for Z, Y, Z axis.
+#---rotation for Z, Y, Z axis. .. since we want 3d.. zup
 def mrotz(deg):
     """turn. rh, in:deg.
     """
@@ -110,14 +166,28 @@ def mrotx(deg):
     return mat
 
 
-if __name__ == '__main__':
-    target = vpos(5,0,0)
-    P = mtrans(10,10)
-    R = mrot((0,0,1), 30)
-    S = mscale(3)    
-    end = multi_dot( (P,R,S,target) )
-    print(end)
-    #[22.990381 17.5       0.        1.      ]
+def rotate_z(vector,degree):
+    if len(vector) == 3:
+        mat4 = mrotz(degree)
+        v4 = vpos( vector )
+        v4 = mat4 @ v4
+        return vec3( v4[0],v4[1],v4[2] )
+    elif len(vector) == 4:
+        mat4 = mrotz(degree)
+        return mat4 @ vector
+
+def rotate_y(vector,degree):
+    if len(vector) == 3:
+        mat4 = mroty(degree)
+        v4 = vpos( vector )
+        v4 = mat4 @ v4
+        return vec3( v4[0],v4[1],v4[2] )
+    elif len(vector) == 4:
+        mat4 = mroty(degree)
+        return mat4 @ vector
+
+
+#------------------- MVP matrix 
 
 
 #--------view matrix.
@@ -127,74 +197,12 @@ if __name__ == '__main__':
 #lookat means , world to view trans.
 #...actually glulookat is for cam. maybe deprecated..ha.
 
-
-
-
-def mview(eye,target,upV):
-    """input each vector..4! no tuple."""
-    #vpos3()
-    #we need up right front.
-    #front ,fine. up,up. right = cross front,up
-    front = target - eye
-    right = np.cross( front, upV)
-    up = upV
-    front = front/np.linalg.norm(front)
-    right = right/np.linalg.norm(right)
-    up = up/np.linalg.norm(up)
-    
-    view1 = [[right[0],right[1],right[2],0],
-    [up[0],up[1],up[2],0],
-    [front[0],front[1],front[2],0],
-    [0,0,0,1]]
-    
-    view2 = [[1,0,0,-eye[0]],
-    [0,1,0,-eye[1]],
-    [0,0,1,-eye[2]],
-    [0,0,0,1]]
-
-    view1 = np.array(view1,dtype='float32')
-    view2 = np.array(view2,dtype='float32')
-    #print(view1,'v1')
-    #print(view2,'v2')
-    return view1@view2
-
-def mview_rotation(eye,target,upV):
-    """input each vector..4! no tuple."""
-    front = target - eye
-    front = front/np.linalg.norm(front)
-
-    right = np.cross(front, upV)
-    right = right/np.linalg.norm(right)
-
-    up = np.cross(right , front)
-    
-    #print(front,right,up,'isnorm')
-
-    #slower 30% since /norm.
-    #front = front/np.linalg.norm(front)
-    #right = right/np.linalg.norm(right)
-    #up = up/np.linalg.norm(up)
-    
-    
-    view1 = [[right[0],right[1],right[2],0],
-    [up[0],up[1],up[2],0],
-    [front[0],front[1],front[2],0],
-    [0,0,0,1]]
-
-    # view1 = [
-    # [right[0],up[1],front[2],0],
-    # [right[0],up[1],front[2],0],
-    # [right[0],up[1],front[2],0],
-    # [0,0,0,1]] 
-    
-    return np.array(view1,dtype='float32')
 #https://www.3dgep.com/understanding-the-view-matrix/
 #optimize v@v
 
-
-def mview_col(eye,target,upV):
+def mlookat(eye,target,upV):
     """input each vector..4! no tuple."""
-    front = target - eye
+    front = eye-target#donno why but this way.fine. we have lot to do.
     front = front/np.linalg.norm(front)
 
     right = np.cross(upV, front)
@@ -209,46 +217,19 @@ def mview_col(eye,target,upV):
     [front[0],front[1],front[2],0],
     [0,0,0,1]]
     
-    return np.array(view1,dtype='float32')
+    v1 =  np.array(view1,dtype='float32')
 
-def mview_translate(eye,target,upV):
-    """input each vector..4! no tuple."""   
     view2 = eye4()    
     view2[0][3] = -eye[0]
     view2[1][3] = -eye[1]
     view2[2][3] = -eye[2]
-    return np.array( view2, dtype='float32')
+    v2 = np.array( view2, dtype='float32')
+
+    return v1@v2
 
 
-eye = vpos3(3,0,1)
-target = vpos3(0,0,0)
-upV = vpos3(0,1,0)
 
 
-eye = vpos3(2,0,0)
-#eye = vpos3(cam.x,cam.y,cam.z)
-target = vpos3(0,0,0)
-upV = vpos3(0,1,0)
-
-
-#rotv = mview_rotation(eye,target,upV)
-rotv = mview_col(eye,target,upV)
-transv = mview_translate(eye,target,upV)
-print('rototo')
-print(eye,target,upV)
-
-print(rotv,'rot')
-print(transv,'tr')
-
-
-#print(mview_rotation(eye,target,upV))
-#print(mview_translate(eye,target,upV))
-
-
-#vv = mview(eye,target,upV)
-#print(vv)
-#po = vpos(1,0,0)
-#print(vv.dot(po))
 
 
 
@@ -259,26 +240,8 @@ print(transv,'tr')
 #---left right bottom top near far. 6 attrs.
 
 #https://stackoverflow.com/questions/42864623/glortho-equivalent-to-vbos
-
+#---actguatly colmom !
 def mortho(left, right, bottom, top, near, far):
-    ortho = eye4()
-
-    tx = -(right + left) / (right - left)
-    ty = -(top + bottom) / (top - bottom)
-    tz = -(far + near) / (far - near)
-
-    ortho[0][0] = 2 / (right - left)
-    ortho[1][1] = 2 / (top - bottom)
-    ortho[2][2] = -2 / (far - near)
-    ortho[0][3] = tx
-    ortho[1][3] = ty
-    ortho[2][3] = tz        
-    return ortho
-
-
-
-
-def mperspective(left, right, bottom, top, near, far):
     ortho = eye4()
 
     tx = -(right + left) / (right - left)
@@ -294,6 +257,46 @@ def mperspective(left, right, bottom, top, near, far):
     return ortho
 
 
+
+def mperspective(fov, asfect, near, far):
+    fov = np.radians(fov)
+    ortho = eye4()
+
+    f= 1/ np.tan(fov/2)
+    
+    head = f/asfect
+    body = f
+    mid = (far+near)/(near-far)
+    east = (2*far*near)/(near-far)
+
+    ortho[0][0] = head
+    ortho[1][1] = body
+    ortho[2][2] = mid
+    ortho[2][3] = east
+
+    ortho[3][2] = -1
+    ortho[3][3] = 0
+    return ortho
+
+#ort = mperspective(1.0297, 800 / 600, 0.1, 100.0)
+#print(ort)
+#print(ort[0][0])
+
+
+if __name__ == '__main__':
+    target = vpos(5,0,0)
+    P = mtrans(10,10)
+    R = mrot((0,0,1), 30)
+    S = mscale(3)    
+    end = multi_dot( (P,R,S,target) )
+    print(end)
+    #[22.990381 17.5       0.        1.      ]
+
+
+
+
+
+
 #----..the.. viewport matrix.
 def mviewport(left,bottom,width,height):
     mat = [
@@ -307,10 +310,144 @@ def mviewport(left,bottom,width,height):
 
 
 
+
+
+
+#---------------------------test
+#----------------------ref
+
+#row major 
+#when camera : [2. 0. 0.] [0. 0. 0.] [0. 1. 0.]
+
+# [[ 0. -0.  1.  0.]
+#  [ 0.  1.  0.  0.]
+#  [-1.  0.  0.  0.]
+#  [ 0.  0.  0.  1.]] rot
+# [[ 1.  0.  0. -2.]
+#  [ 0.  1.  0. -0.]
+#  [ 0.  0.  1. -0.]
+#  [ 0.  0.  0.  1.]] tr
+#=================================
+
+# eye = vec3(0,0,2)
+# target = vec3(0,0,0)
+# upV = vec3(0,1,0)
+# vvv  = mview(eye,target,upV)
+#print(vvv)
+
+# eye = vec3(2,0,0)
+# target = vec3(0,0,0)
+# upV = vec3(0,1,0)
+# rotv = mview_rotation(eye,target,upV)
+# transv = mview_translate(eye,target,upV)
+# print('rototo')
+# print(eye,target,upV)
+# print(rotv,'rot')
+# print(transv,'tr')
+
+
+
+
+
+
+
+
+
+
+
 #-----------------------below is history
-#list : tests /  naming,define /  3.old concept
+#list : npVector /  battle / tests /  naming,define /  3.old concept
 
 
+
+#npvector old version. close, but i want full function of ndarray, need init()anyawy.
+#found new, that's the one. it passes object and holds as self!7
+# class npVector(object):
+#     def __init__(self,x,y,z):
+#         self.array = np.array( [ x,y,z] , dtype = 'float32')
+
+#     def __repr__(self):
+#         return self.array.__repr__()#lovely!
+
+#     def __setattr__(self, name, value):
+#         if name == 'x':
+#             self.array[0] = value
+#         elif name == 'y':
+#             self.array[1] = value
+#         elif name == 'z':
+#             self.array[2] = value
+#         super().__setattr__(name, value)
+
+#     def __getattribute__(self,name):
+#         if name == 'x':
+#             return self.array[0]
+#         elif name == 'y':
+#             return self.array[1]
+#         elif name == 'z':
+#             return self.array[2]
+#         return super().__getattribute__(name)#prevents recur..
+
+
+#view mat parts.
+# #---------------------oonly for history.
+# def mview_rotation(eye,target,upV):
+#     """input each vector..4! no tuple."""
+#     front = target - eye
+#     front = front/np.linalg.norm(front)
+
+#     right = np.cross(upV, front)
+#     right = right/np.linalg.norm(right)
+
+#     up = np.cross(front, right)
+#     up = up/np.linalg.norm(up)
+    
+#     view1 = [
+#     [right[0],right[1],right[2],0],
+#     [up[0],up[1],up[2],0],
+#     [front[0],front[1],front[2],0],
+#     [0,0,0,1]]
+    
+#     return np.array(view1,dtype='float32')
+
+# def mview_translate(eye,target,upV):
+#     """input each vector..4! no tuple."""   
+#     view2 = eye4()    
+#     view2[0][3] = -eye[0]
+#     view2[1][3] = -eye[1]
+#     view2[2][3] = -eye[2]
+#     return np.array( view2, dtype='float32')
+
+
+# 2021.11.30.am1:47. there were 4hrs fight for col-row major.
+# col won.
+# and found perspective mat was an enermy also.
+#     view1 = [
+#     [right[0],right[1],right[2],0],
+#     [up[0],up[1],up[2],0],
+#     [front[0],front[1],front[2],0],
+#     [0,0,0,1]]
+#     VS
+#     view1 = [
+#     [front[0],up[1],right[2],0],
+#     [front[0],up[1],right[2],0],
+#     [front[0],up[1],right[2],0],
+#     [0,0,0,1]]
+
+#----row major trator!    
+# def mortho(left, right, bottom, top, near, far):
+#     ortho = eye4()
+
+#     tx = -(right + left) / (right - left)
+#     ty = -(top + bottom) / (top - bottom)
+#     tz = -(far + near) / (far - near)
+
+#     ortho[0][0] = 2 / (right - left)
+#     ortho[1][1] = 2 / (top - bottom)
+#     ortho[2][2] = -2 / (far - near)
+#     ortho[0][3] = tx
+#     ortho[1][3] = ty
+#     ortho[2][3] = tz
+#     return ortho
 
 
 
