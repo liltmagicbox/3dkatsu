@@ -93,7 +93,6 @@ def vcopy3(vec3):
 # print(' copy returns npVector, not ndarray! ')
 
 
-
 class Quaternion:
     """ tuple holding vec3 and float.
     """
@@ -101,7 +100,7 @@ class Quaternion:
         #qv = super().__new__(self, x,y,z) #finally understood what init automatically sends self.
         #haha. we assume q as has attr v and s. thats all. v for vec3!
 
-    def __init__(self, x,y,z,w):        
+    def __init__(self, x,y,z,w):
         self.v = vec3(x,y,z)
         self.s = w
 
