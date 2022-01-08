@@ -93,6 +93,48 @@ def vcopy3(vec3):
 # print(' copy returns npVector, not ndarray! ')
 
 
+def normalize(vec):
+    """ vec /norm if norm not 0
+    """
+    norms = norm(vec)
+    if not norms == 0:
+        return vec/norms
+    return vec
+
+
+#===============================------------------- MVP matrix 
+
+#--- matrix 4x4 returns
+def mtrans(*args):
+    """ in:x, xy, xyz, (xyz) out:mat4 translate 1,0,0,Tx
+    """
+    Tx,Ty,Tz = argsparse3(args)
+    mat = eye4()
+    mat[0][3] = Tx
+    mat[1][3] = Ty
+    mat[2][3] = Tz
+    return mat
+
+
+def mscale(*args):
+    """ in:x, xy, xyz, (xyz) out:mat4 scale 1,0,0,Sx
+    """
+    if len(args) == 1:#for scale only. it's temporal, not great way..
+        Sx,Sy,Sz = args[0],args[0],args[0]        
+    else:
+        Sx,Sy,Sz = argsparse3(args)
+    mat = eye4()
+    mat[0][0] = Sx
+    mat[1][1] = Sy
+    mat[2][2] = Sz
+    return mat
+
+
+
+
+#==============all integrated in Q-.
+#-------------------naming rule
+# quat-- kinds.    input v1,v2 named ---v ex)quatv
 class Quaternion:
     """ tuple holding vec3 and float.
     """
@@ -100,15 +142,22 @@ class Quaternion:
         #qv = super().__new__(self, x,y,z) #finally understood what init automatically sends self.
         #haha. we assume q as has attr v and s. thats all. v for vec3!
 
-    def __init__(self, x,y,z,w):
+    def __init__(self, *args):
+        length = len(args)
+        if length==4:
+            x,y,z,w = args            
+        if length==2:
+            if len(args[1]) == 1:# means th
+                axis = args[0]
+                th = args[1]
+                x,y,z,w = quatel(axis,th)
+            else:#means was v1,v2
+                v1,v2 = args
+
         self.v = vec3(x,y,z)
         self.s = w
-
         #just grab vetor componant..haha.. no q.x kinds.
-        # self.x = x
-        # self.y = y
-        # self.z = z
-        # self.w = w
+
     # def __repr__(self):
     #     return 'ham'
     def __str__(self):
@@ -149,15 +198,7 @@ q = Quaternion(1,0,0,1)
 
 #print(type(q))
 
-#------those 2 are internal function.
-def normalize(vec):
-    """ vec /norm if norm not 0
-    """
-    norms = norm(vec)
-    if not norms == 0:
-        return vec/norms
-    return vec
-
+#----el, axis mid-function.
 def quatel(axis,th):
     """ named quat_. returns x y z w. preventing axis,cos things.
     """
@@ -166,11 +207,7 @@ def quatel(axis,th):
     w = cos(th/2) #s
     return x,y,z,w
 
-#----all integrated in Q-.
-#def quat(axis,th):
-def quat(v1,v2):
-    """ keep remained quat. too hard to exactly spell quaternion.
-    """
+def quataxis(v1,v2):
     front = normalize(v1)
     facing = normalize(v2)
     
@@ -181,14 +218,18 @@ def quat(v1,v2):
     #front = normalize(front)
     #print(front,facing, front.dot(facing) )[nan nan nan] [nan nan nan] nan
     th = arccos( front.dot(facing) )
-    #return (axis,th)
+    return axis,th
+
+#def quat(axis,th):
+def quatv(v1,v2):
+    """ keep remained quat. too hard to exactly spell quaternion.
+    """
+    axis,th = quataxis(v1,v2)
     x,y,z,w = quatel(axis,th)
     return Quaternion(x,y,z,w)
 
-#---quat multiply,,
-def slerp(vec1,vec2,ratio):
-    1
-
+#---quat multiply,, see mrotv
+#def slerp(vec1,vec2,ratio):
 
 
 #----------is for the quaternion.
@@ -208,53 +249,26 @@ def mrot(axis,th):
     #print( norm((qx,qy,qz,qw))) for unit quat.
 
     #https://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToMatrix/index.htm
-    quat = [
+    return quatmat(qx,qy,qz,qw)
+
+def quatmat(qx,qy,qz,qw):
+    mat = [
     [1 - 2*qy**2 - 2*qz**2,   2*qx*qy - 2*qz*qw,   2*qx*qz + 2*qy*qw, 0],
     [2*qx*qy + 2*qz*qw,   1 - 2*qx**2 - 2*qz**2,   2*qy*qz - 2*qx*qw, 0],
     [2*qx*qz - 2*qy*qw,   2*qy*qz + 2*qx*qw,   1 - 2*qx**2 - 2*qy**2, 0],
     [0,0,0,1]
     ]
-    return array(quat,dtype='float32')
+    return array(mat,dtype='float32')
 
-#print(0==norm(vec3(0,0,0)),'hm')
-#a=mrot(vec3(0,0,0),1) #seems rh.fine. seems working.
-#print(a)
-
-
-#---moved and integrated to quat.
-#def mrotv(front,facing):->mrot departed.
-    """return 4x4 rot v1 to v2.
+def mrotv(v1,v2, t=1.0):
+    """ t= 0~1 ratio
     """
-    #---check if qv same dir front
-    #if front == facing: #or use vec3same() kinds??
-    #    return eye4()
-    #we check at mrot.
-    
+    axis,th = quataxis(v1,v2)
+    qx,qy,qz,qw = quatel(axis,th*t)
+    return quatmat(qx,qy,qz,qw)
 
 
-#-----when Missile.. facing also requires normalized.
-#print(axis,th)[nan nan nan] [0.        1.5707964 1.5707964]
-#front =  vec3([-0.6113929  , 0.02094242  ,0.79105   ])
-#facing = vec3([35.69067   , -0.30694106 , 8.406034  ] )
-
-#mrotv(front,facing)
-
-# front = 
-# pos
-# target
-
-# #---qv
-# dist = target-pos
-# facing = dist/norm(dist) #similier to front
-# axis = cross(front, facing)
-# axis = axis/norm(axis)
-# #---qs
-# th = arccos(front, facing)
-# #---check if qv same dir front
-# #...
-# rotmat = mrot(axis,deg)
-     
-
+#--------------------------------xyz rotations
 
 def mrotxyz(xyztuple):
     """x-roll, y-pitch, z-yaw. imagine x-front plane.
@@ -341,6 +355,9 @@ def rotate_y(vector,degree):
 
 
 
+
+
+
 #=============================not used but, skip by xyz. recoded max 2x speed.
 def mrotxyzE(xyztuple):
     """x-roll, y-pitch, z-yaw. imagine x-front plane.
@@ -422,35 +439,46 @@ def mrotxyz8(xyztuple):
 
 
 
+#=================commented soon will eb buried
+#print(0==norm(vec3(0,0,0)),'hm')
+#a=mrot(vec3(0,0,0),1) #seems rh.fine. seems working.
+#print(a)
 
-
-#--- matrix 4x4 returns
-def mtrans(*args):
-    """ in:x, xy, xyz, (xyz) out:mat4 translate 1,0,0,Tx
+#---moved and integrated to quat.
+#def mrotv(front,facing):->mrot departed.
+    """return 4x4 rot v1 to v2.
     """
-    Tx,Ty,Tz = argsparse3(args)
-    mat = eye4()
-    mat[0][3] = Tx
-    mat[1][3] = Ty
-    mat[2][3] = Tz
-    return mat
+    #---check if qv same dir front
+    #if front == facing: #or use vec3same() kinds??
+    #    return eye4()
+    #we check at mrot.
+    
 
 
-def mscale(*args):
-    """ in:x, xy, xyz, (xyz) out:mat4 scale 1,0,0,Sx
-    """
-    if len(args) == 1:#for scale only. it's temporal, not great way..
-        Sx,Sy,Sz = args[0],args[0],args[0]        
-    else:
-        Sx,Sy,Sz = argsparse3(args)
-    mat = eye4()
-    mat[0][0] = Sx
-    mat[1][1] = Sy
-    mat[2][2] = Sz
-    return mat
+#-----when Missile.. facing also requires normalized.
+#print(axis,th)[nan nan nan] [0.        1.5707964 1.5707964]
+#front =  vec3([-0.6113929  , 0.02094242  ,0.79105   ])
+#facing = vec3([35.69067   , -0.30694106 , 8.406034  ] )
+
+#mrotv(front,facing)
+
+# front = 
+# pos
+# target
+
+# #---qv
+# dist = target-pos
+# facing = dist/norm(dist) #similier to front
+# axis = cross(front, facing)
+# axis = axis/norm(axis)
+# #---qs
+# th = arccos(front, facing)
+# #---check if qv same dir front
+# #...
+# rotmat = mrot(axis,deg)
+     
 
 
-#------------------- MVP matrix 
 
 
 

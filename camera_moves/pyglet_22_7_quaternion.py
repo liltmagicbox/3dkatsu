@@ -63,7 +63,9 @@ shader_default = shaders.compileProgram( vshader,fshader)
 window = pyglet.window.Window()
 window.set_size(800, 600)
 window.set_exclusive_mouse(True) #lock mouse x,y 0, hold. use dxdy!
-
+#pyglet.window.Window.vsync =False
+#print( window.vsync )
+#window.set_vsync(False)
 #============gl settings
 glEnable(GL_DEPTH_TEST) #--skip depth less
 pyglet.gl.glPointSize(5)
@@ -112,7 +114,7 @@ def loadobj_return_vlist_texture(objname):
 
 
 import numpy as np
-from np_modelmat import vec3,vpos,vdir,eye4,vcopy3,normalize
+from np_modelmat import vec3,vpos,vdir,eye4,vcopy3,normalize, cross
 from np_modelmat import mlookat,mortho,mperspective, mtrans,mscale, mrot, mrotv
 from np_modelmat import mrotxzy as mrotxyz # for yup!
 #from np_modelmat import vcopy3 #for replace .copy() and vec3(front) . 
@@ -169,26 +171,38 @@ class Gameworld:
     #world.actor_get(Camera, 0)??? --but it requires remember all Class names..
     def actor_get(self, name, i=None):#name automatically Class_0 or named.
         """ name for actor.name. // if i, returns actor_dict[name][i]
+        named
+        class index
+        class list
+        get('plane777') -> named actor, for search.
+        get('Airplane') ->classname, yields
+        get('Camera',0) -> indexed, cam[0]
+        get('Camera')-> it's class, yields.
         """
-        if not i == None: # 0=>True. .. not worked. changed from if i:
+        # i want actor_get returns an actor, not yield self.actor_dict.get(name,[None])
+        if not i==None: # 0=>True. .. not worked. changed from if i:
             #return self.actor_dict[name][i]
             return self.actor_dict.get(name,[None])[i] #i love it.
-        #return self.actor_dict[name][-1]
         
-        #---it complexed. fine. cost- kind thing..
-        else:#find by actor.name.
+        #---named actor. fine. cost- kind thing..
+        #find by actor.name.
+        else:
             for actor in self.actor_all():
                 if actor.name == name:
                     return actor
         return None
 
 
-    def actor_all(self):# if you want draw kinds.. nono not active may not be collected here.
-        for classname, actor_list in self.actor_dict.items():
-            for actor in actor_list:
-                #if actor.active: -- good to update??
-                #if actor.draw: --draw?? i think it required.
+    def actor_all(self, classname=None):# if you want draw kinds.. nono not active may not be collected here.
+        if classname:
+            for actor in self.actor_dict.get(classname,[None]):
                 yield actor
+        else:
+            for classname, actor_list in self.actor_dict.items():
+                for actor in actor_list:
+                    #if actor.active: -- good to update??
+                    #if actor.draw: --draw?? i think it required.
+                    yield actor
 
     #ihope get cam by camera_list[i].  but unless you not use world.actor_list=[]...?
     def camera_get(self, i):
@@ -248,7 +262,7 @@ class Actor:
     def move_front(self,speed):
         self.speed = self.front * speed * self.speed_factor
     def move_right(self,speed):
-        right = np.cross(self.front, self.up)
+        right = cross(self.front, self.up)
         self.speed = right * speed * self.speed_factor
     def move_up(self,speed):
         self.speed = self.up * speed * self.speed_factor
@@ -256,7 +270,7 @@ class Actor:
     def move_front_world(self,speed):
         self.speed = world.front * speed * self.speed_factor
     def move_right_world(self,speed):
-        right = np.cross(world.front, world.up)
+        right = cross(world.front, world.up)
         self.speed = right * speed * self.speed_factor
     def move_up_world(self,speed):
         self.speed = world.up * speed * self.speed_factor
@@ -281,7 +295,7 @@ class Actor:
         #if not self.front == self.front_before:#need update self.rotmat
 
         #rh rule, frontXup = right.
-        #right = np.cross(self.front , self.up)
+        #right = cross(self.front , self.up)
         
         #worldrot = mrotv(world.front, self.front)#SO SIMPLE FINE
         worldrot = mrotv(vec3(1,0,0), self.front)#
@@ -550,9 +564,9 @@ class Missile(Actor):
             facing = self.target.pos - self.pos
             front = self.front
             d = vdir(front)
-            m = mrotv(front,facing)
+            m = mrotv(front,facing,dt*1)
             new_front = normalize(m@d)
-            self.front = vec3(new_front)            
+            self.front = vec3(new_front)
             #self.front = self.front*dt*0.9 +vec3(new_front)*dt*0.1 we dont do this. do slerp..
             
             self.speed = self.velocity*self.front
@@ -577,6 +591,7 @@ car.mesh_add(carmesh)
 
 cam = Camera()
 cam.pos = vec3(-2,0,-20)
+cam.speed_factor = 20
 #cam.front = vec3(0,0,1) yaw pitch cam moves diffeenetly.
 cam.yaw = 60
 #cam.target = car
@@ -601,7 +616,7 @@ vlist1 , texture1 = loadobj_return_vlist_texture(objname)
 projectile = Projectile()
 projectile.name = 'peach777' #this happens. we set all data of actor, then adds to world..
 #projectile.speed = vec3(10,5,0)
-projectile.speed = vec3(-15,0,0)
+projectile.speed = vec3(-1,0,0)
 projectile.pos = vec3(50,0,0)
 rockmesh = [vlist1, [texture1,texture1]]
 projectile.mesh_add(rockmesh)
@@ -612,7 +627,7 @@ projectile.droptime = 1
 projectile.timea = time()
 def dropp():
     if time() - projectile.timea > projectile.droptime:
-        drop(projectile)
+        #drop(projectile)
         projectile.timea = time()
     #print(time() - projectile.timea)
 
@@ -685,7 +700,7 @@ class Debugger:
         #self.target = "None" #is pure str, directly gets value.
         self.code = None
 
-    def update(self):# acutally time stamp need. fine.
+    def update(self,dt):# acutally time stamp need. fine.
         if self.debug:
             value = eval( self.code ) #runs compiled code. eval catchs value..
             self.data_list.append(value)
@@ -696,7 +711,7 @@ class Debugger:
     def on_key_press(self,symbol):
         if symbol == key.P:
             #requires input, like console input, and type, and enter.
-            text = 'world.actor_list[2].pos.y'
+            text = 'dt'
             try:
                 self.code = compile( text, '<string>', 'eval')
             except:
@@ -728,13 +743,10 @@ debugger = Debugger()
 
 
 
-
-
 #=====================================UPDATE OCCURS
 def update(dt):
     #fps = pyglet.clock.get_fps()
     #print(fps)    #or 1/dt-errors div/0
-    
     #----input manager #assume it called before ondraw
     controller.update(dt)
 
@@ -758,7 +770,7 @@ def update(dt):
 
 
     
-    debugger.update()
+    debugger.update(dt)
 
 pyglet.clock.schedule(update)#passes dt. for maxspeed. finally! with vsync.
 #we may, world.clock kinds..
@@ -832,16 +844,28 @@ class Controller:
         self.mouse_value.y += dy
     def on_mouse_press(self, x, y, button, modifiers):
         #print(button) #1 2 4 
+        cam = world.actor_get('Camera',0)
+        peach = world.actor_get('peach777')
+        
         if button == 1:
-            fire(cam, target = world.actor_get('peach777') )
+            fire(cam, target = peach )
         if button == 4:
             #missile = world.actor_get('Missile',0)
-            for missile in world.actor_dict['Missile']:#this brings error, not good.
+            for missile in world.actor_all('Missile'):#.actor_dict['Missile'] this brings error, not good.-fixed
                 if missile.target == None:
-                    missile.target = world.actor_get('peach777')
+                    missile.target = peach
+                    print('targeting')
                 else:
                     missile.target = None
+        
+        if button == 2:
+            #cam.pos = peach.pos+vec3(10,5,0)
+            missile = world.actor_get('Missile',-1)
+            cam.pos = missile.pos+vec3(10,5,0)
 
+            seedir = peach.pos-cam.pos
+            #cam.front = normalize(seedir) mouse takes all control.. holding pitch. need fix.
+            
 
     def on_key_press(self, symbol,modifiers):
         for actor in world.actor_all():
