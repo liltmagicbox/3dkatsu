@@ -21,6 +21,42 @@ from time import time, sleep
 
 
 
+#===================== HOW SYSTEM WORKS
+# >>> forward way
+# <<< backward
+# rotmat xyz front   axisangle quat
+#[those 3 trigonal]
+# quat-rotmat connected
+# front departed roll, to upV. need upV for rotmat back.
+
+
+# pos=   spd=    acc=   F=
+#        pos+=   spd+=  acc+=  F+=
+#up direct set value    >>>seems accurate >>>
+#down add value,     >>> physcally simulated depth >>>
+
+# xyz only can handle rspd, racc.
+# if you want preserved r-spd, save xyz and use from it.
+
+# 'xyz or front mode' ,
+# imagine heavy switch both xyz(trigonal) VS front(game vector).
+# not move so frequently, but you can do what you want
+
+
+
+#-------------------------------
+
+
+#boolean not. seems bestway..
+# a = np.arange(10)
+# TF = a>5
+# FT = np.logical_not(TF)
+# print(TF)
+# print(FT)
+# exit()
+# FT = TF
+# print(FT)
+
 
 
 
@@ -30,33 +66,30 @@ from time import time, sleep
 
 #those 2 don requires colmat. it's the only way to create rotmat by xyz..
 
-@nb.jit(nopython=True , parallel = True)
-def axis_quat_rotmat(w,x,y,z):
-    N = len(x)
-    rotmat = np.zeros(16*N, dtype='float32').reshape(16,N)
+def axis_N_colmat(N):
+    """ col major order 4x4 matrix.
+    for gpuready, need to be .T
+    2ms to create of 1M
+    """
+    colmat = np.zeros(16*N, dtype='float32').reshape(16,N)
+    return colmat
 
-    rotmat[0] = 1 - 2*y**2 - 2*z**2
-    rotmat[1] = 2*x*y - 2*z*w
-    rotmat[2] = 2*x*z + 2*y*w
-    #rotmat[3] =  0    
-    rotmat[4] = 2*x*y + 2*z*w
-    rotmat[5] = 1 - 2*x**2 - 2*z**2
-    rotmat[6] = 2*y*z - 2*x*w
-    #rotmat[7] = 0
-    rotmat[8] = 2*x*z - 2*y*w
-    rotmat[9] = 2*y*z + 2*x*w
-    rotmat[10] = 1 - 2*x**2 - 2*y**2
-    #rotmat[11] = 0
-    
-    #rotmat[12] = 0
-    #rotmat[13] = 0
-    #rotmat[14] = 0
-    rotmat[15] = 1
-    return rotmat
+#for faster teszxt
+def axis_N_colmat3x3(N):
+    """ col major order 4x4 matrix.
+    for gpuready, need to be .T
+    2ms to create of 1M
+    """
+    colmat = np.zeros(9*N, dtype='float32').reshape(9,N)
+    return colmat
 
+#--------basic transform to rotmat
+#what this for?? we prefer  colmat input way.
+#maybe for reference..?
 @nb.jit(nopython=True , parallel = True)
 def axis_xyz_rotmat(x,y,z):
     # err if x==1. but see axis_, it's for axis!
+    #col major matrix.. for gpu. Rx,Ry,Rz=R,P,Y
     N = len(x)
     rotmat = np.zeros(16*N, dtype='float32').reshape(16,N)
     cx = np.cos(x)
@@ -87,46 +120,42 @@ def axis_xyz_rotmat(x,y,z):
 
 
 
+#---v0.2.8 added
+#@nb.jit(nopython=True , parallel = True)
+def axis_rotmat_xyz(rotmat):
+    """ reversed, rotmat from xyz.
+     y=90, ..
+    """
+    #https://stackoverflow.com/questions/15022630/how-to-calculate-the-angle-from-rotation-matrix
+    #was bad x=y.
+    #https://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToEuler/index.htm
+    #all broken
+    #http://eecs.qmul.ac.uk/~gslabaugh/publications/euler.pdf
+    #finaylly! i use 1,3.
 
+    r11= rotmat[0]
+    #r12= rotmat[1]
+    #r13= rotmat[2]
 
-#very clever. rotmat can be easyly assumed 4x4 general form.
-#this returns tuple... so another name-group?.. no!yet.
-@nb.jit(nopython=True , parallel = True)
-def axis_xyz_rot3x3(x,y,z):
-    #skip colmat, faster. input requires time.
-    # x,y,z means Rx,Ry,Rz. thats all.,not! yaw (Z), pitch (Y), roll (X)
-    #https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
-    cx = np.cos(x)
-    sx = np.sin(x)
-    cy = np.cos(y)
-    sy = np.sin(y)
-    cz = np.cos(z)
-    sz = np.sin(z)
+    r21= rotmat[4]
+    #r22= rotmat[5]
+    #r23= rotmat[6]
+    
+    r31= rotmat[8]
+    r32= rotmat[9]
+    r33= rotmat[10]
 
-    return cy*cz, -cx*sz+sx*sy*cz, sx*sz+cx*sy*cz,\
-    cy*sz, cx*cz+sx*sy*sz, -sx*cz+cx*sy*sz,\
-    -sy,   sx*cy,       cx*cy
-
-#maybe it similler to lookat..
-#its not for jit.  i did, and 24ms slower compared original 16ms.
-def axis_Nxyzxyz_posrotmat(N, Tx,Ty,Tz, x,y,z):
-    posrot = np.zeros(16*N, dtype='float32').reshape(16,N)
-    posrot[15]=1
-    rot3x3 = axis_xyz_rot3x3(x,y,z)
-    posrot[0],posrot[1],posrot[2],\
-    posrot[4],posrot[5],posrot[6],\
-    posrot[8],posrot[9],posrot[10] = rot3x3
-    posrot[3] =Tx
-    posrot[7] =Ty
-    posrot[11]=Tz
-    return posrot
+    x = np.arctan2(r32,r33)
+    y = -np.arcsin( r31 )
+    z = np.arctan2(r21,r11)
+    return x,y,z
 
 
 
 
 
-
-# those requires colmat
+# ---- to modelmat
+# those requires colmat for faster, re-use.
 # colmat = np.zeros(16*NN, dtype='float32').reshape(16,NN)
 # because m=TRS, eachtime creating zeros inside of.. is terrorble.
 
@@ -187,91 +216,93 @@ def axis_matxyz_rotmat(colmat, Rx,Ry,Rz):
 
 
 
+
+#==============22vs33 it defeated. 25vs33 defeated +colmat..
+#very clever. rotmat can be easyly assumed 4x4 general form.
+#this returns tuple... so another name-group?.. no!yet.
 @nb.jit(nopython=True , parallel = True)
-def axis_matfront_rotmat(colmat, x,y,z):
-    """ rotmat by front.
-    colmat = zeros(16,N).float32.  colmat[15]=1.
-    """
+def xxxaxis_xyz_rot3x3(x,y,z):
+    #skip colmat, faster. input requires time.
+    # x,y,z means Rx,Ry,Rz. thats all.,not! yaw (Z), pitch (Y), roll (X)
+    #https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+    cx = np.cos(x)
+    sx = np.sin(x)
+    cy = np.cos(y)
+    sy = np.sin(y)
+    cz = np.cos(z)
+    sz = np.sin(z)
 
-    #col major matrix.. for gpu. Rx,Ry,Rz=R,P,Y
-    cx = np.cos(Rx)
-    sx = np.sin(Rx)
-    cy = np.cos(Ry)
-    sy = np.sin(Ry)
-    cz = np.cos(Rz)
-    sz = np.sin(Rz)
+    return cy*cz, -cx*sz+sx*sy*cz, sx*sz+cx*sy*cz,\
+    cy*sz, cx*cz+sx*sy*sz, -sx*cz+cx*sy*sz,\
+    -sy,   sx*cy,       cx*cy
 
-    colmat[0] = cy*cz
-    colmat[1] = -cx*sz+sx*sy*cz
-    colmat[2] = sx*sz+cx*sy*cz
+#maybe it similler to lookat..
+#its not for jit.  i did, and 24ms slower compared original 16ms.
+def xxxaxis_Nxyzxyz_posrotmat(N, Tx,Ty,Tz, x,y,z):
+    posrot = np.zeros(16*N, dtype='float32').reshape(16,N)
+    posrot[15]=1
+    rot3x3 = xxxaxis_xyz_rot3x3(x,y,z)
+    posrot[0],posrot[1],posrot[2],\
+    posrot[4],posrot[5],posrot[6],\
+    posrot[8],posrot[9],posrot[10] = rot3x3
+    posrot[3] =Tx
+    posrot[7] =Ty
+    posrot[11]=Tz
+    return posrot
 
-    colmat[4] = cy*sz
-    colmat[5] = cx*cz+sx*sy*sz
-    colmat[6] = -sx*cz+cx*sy*sz
+
+
+
+
+def test_xyz_fromrotmat():
+    #radians 0-1 is 0-60. fine.
+    x = np.random.rand(5)
+    y = np.random.rand(5)
+    z = np.random.rand(5)
+    print(x)
+    print(y)
+    print(z)
+
+    print('===')
+    R = axis_xyz_rotmat(x,y,z)
+    rx,ry,rz = axis_rotmat_xyz(R)
+    #(array([0.], dtype=float32), array([0.], dtype=float32), array([0.5], dtype=float32))
+    print(rx)
+    print(ry)
+    print(rz)
+
+
+
+def test_TRmat_VS_TxR():
+    # speed test T*R vs TR
+    #axis_Nxyzxyz_posrotmat
+    NN = 100_0000
+    X = np.random.rand(NN)
+    Y = np.random.rand(NN)
+    Z = np.random.rand(NN)
+    colmat = axis_N_colmat(NN)
+
+    rotmat2 = xxxaxis_Nxyzxyz_posrotmat(NN,X,Y,Z,X,Y,Z)
+    rotmat1 = axis_matxyz_rotmat(colmat, X,Y,Z)
     
-    colmat[8] = -sy
-    colmat[9] = sx*cy
-    colmat[10] = cx*cy
-    return colmat
+    t = time()
+    rotmat2 = xxxaxis_Nxyzxyz_posrotmat(NN,X,Y,Z,X,Y,Z)
+    print(time()-t, 'posrotmat')
+    t = time()
+    colmat = axis_N_colmat(NN)
+    rotmat1 = axis_matxyz_rotmat(colmat, X,Y,Z)
+    print(time()-t, 'matxyz')
 
-
-
-#for 'xyz or front mode'
-#front lost roll, need upV to >> rotmat or xyz.
-#boolean not. seems bestway..
-# a = np.arange(10)
-# TF = a>5
-# FT = np.logical_not(TF)
-# print(TF)
-# print(FT)
-# exit()
-# FT = TF
-# print(FT)
-
-
-
-#---v0.2.8 added
-@nb.jit(nopython=True , parallel = True)
-def axis_rotmat_xyz(rotmat):
-    """ reversed, rotmat from xyz.
-     y=90, ..
-    """
-    #https://stackoverflow.com/questions/15022630/how-to-calculate-the-angle-from-rotation-matrix
-
-    r11= rotmat[0]
-    r12= rotmat[1]
-    r13= rotmat[2]
-
-    r21= rotmat[4]
-    r22= rotmat[5]
-    r23= rotmat[6]
+    t = time()
+    rotmat1 = axis_matxyz_rotmat(colmat, X,Y,Z)
+    print(time()-t, 'matxyz')
+    t = time()
+    rotmat2 = xxxaxis_Nxyzxyz_posrotmat(NN,X,Y,Z,X,Y,Z)
+    print(time()-t, 'posrotmat')
     
-    r31= rotmat[8]
-    r32= rotmat[9]
-    r33= rotmat[10]
+    #22vs 33 posrotmat even slow! since it creates colmat inside..
+    return 
 
-    x = np.arctan2(r32,r33)
-    y = np.arctan2(-r31, np.sqrt(r32**2,r33**2) )
-    z = np.arctan2(r21,r11)
-    return x,y,z
-
-#radians 0-1 is 0-60. fine.
-x = np.random.rand(5)
-y = np.random.rand(5)
-z = np.random.rand(5)
-print(x)
-print(y)
-print(z)
-
-print('===')
-R = axis_xyz_rotmat(x,x,z)
-x,y,z = axis_rotmat_xyz(R)
-#(array([0.], dtype=float32), array([0.], dtype=float32), array([0.5], dtype=float32))
-print(x)
-print(y)
-print(z)
-
-exit()
 
 
 #----------------------------------- model matrix
@@ -282,9 +313,8 @@ exit()
 
 
 
-
-
-
+#https://numba.pydata.org/numba-doc/latest/user/parallel.html#diagnostics
+#test.parallel_diagnostics(level=4)
 #----------------------------------- front kinds
 
 @nb.jit(nopython=True , parallel = False)
@@ -307,6 +337,8 @@ def axis_vec_normalize(x,y,z):
     norm = np.sqrt(x**2+y**2+z**2)
     #or you can norm<0001, 1,0,0??no.as it already 0s.
     return x/norm,y/norm,z/norm#may return nan, but ok. fastway!
+
+
 
 @nb.jit(nopython=True , parallel = False)
 def axis_vecquat_rotate_qpq(x,y,z, qw,qx,qy,qz):    
@@ -368,20 +400,41 @@ def axis_quat_front(qw,qx,qy,qz):
 #rotmat 4x4, good using colmat, not directly create 4x4.
 #def axis_front_rotmat(x,y,z, upV = (0,1,0) ):
 
+
+
 #----------------------------------- front kinds
 
 
 
 
-
-
-
-
-
-
-
-
 #----------------------------------- quat
+
+
+@nb.jit(nopython=True , parallel = True)
+def axis_quat_rotmat(w,x,y,z):
+    """not check if quat unit quat
+    """
+    N = len(x)
+    rotmat = np.zeros(16*N, dtype='float32').reshape(16,N)
+
+    rotmat[0] = 1 - 2*y**2 - 2*z**2
+    rotmat[1] = 2*x*y - 2*z*w
+    rotmat[2] = 2*x*z + 2*y*w
+    #rotmat[3] =  0    
+    rotmat[4] = 2*x*y + 2*z*w
+    rotmat[5] = 1 - 2*x**2 - 2*z**2
+    rotmat[6] = 2*y*z - 2*x*w
+    #rotmat[7] = 0
+    rotmat[8] = 2*x*z - 2*y*w
+    rotmat[9] = 2*y*z + 2*x*w
+    rotmat[10] = 1 - 2*x**2 - 2*y**2
+    #rotmat[11] = 0
+    
+    #rotmat[12] = 0
+    #rotmat[13] = 0
+    #rotmat[14] = 0
+    rotmat[15] = 1
+    return rotmat
 
 #xyz to quat
 #xyz to vector --fpscam was, but seems to onlyway: rot(rot(rot))..
@@ -407,30 +460,6 @@ def axis_xyz_quat(x,y,z):
     y = cr * sp * cy + sr * cp * sy
     z = cr * cp * sy - sr * sp * cy
     return w,x,y,z
-
-#BADSTATEOFME
-#the one uses atan2
-#https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
-def axis_quat_xyzBAD(w,x,y,z):
-    """ xyz rpy. 
-    """
-    #roll (x-axis rotation)
-    sinr_cosp = 2 * (w * x + y * z)
-    cosr_cosp = 1 - 2 * (x * x + y * y)
-    roll = np.arctan2(sinr_cosp, cosr_cosp)
-
-    #pitch (y-axis rotation)
-    sinp = 2 * (w * y - z * x)
-    #if (std::abs(sinp) >= 1)
-    #    pitch = std::copysign(M_PI / 2, sinp) #use 90 degrees if out of range
-    #else
-    #    pitch = np.arcsin(sinp)
-
-    #yaw (z-axis rotation)
-    siny_cosp = 2 * (w * z + x * y)
-    cosy_cosp = 1 - 2 * (y * y + z * z)
-    yaw = np.arctan2(siny_cosp, cosy_cosp)
-    return roll,pitch,yaw
 
 
 
@@ -506,6 +535,8 @@ def axis_quat_slerp(w1,x1,y1,z1, w2,x2,y2,z2, t):
 #----------------------------------- quat
 
 
+
+
 #--------------------------------------------axis-angle
 # axis-angle via v1-v2.   aa->quat
 # aa is most likely 'the rotation'. i want actor.rotate(axis,angle) kinds.. not by quat.
@@ -546,6 +577,8 @@ def axis_vec_axisangle(x1,y1,z1, x2,y2,z2):
 #print(axis_vec_axisangle(1,0,0, 0,0,-1))
 #(0, 1, 0, 1.5707963267948966) #works great!
 
+
+
 @nb.jit(nopython=True , parallel = False)
 def axis_axisangle_quat(x,y,z,r):
     """ x,y,z, radians to quat
@@ -559,65 +592,13 @@ def axis_axisangle_quat(x,y,z,r):
     return w,x,y,z
 #not tested
 
-
-#====================BELOW 2 ARE NOT COMFIRNMED . BAD STATE OF ME..
-
-#it liiks liek xyz->quat->aa./
-#actually it means quite quat like situation..
-#we do xyz_quat, quat_axisangle. fine...not fine. we needit.
-#https://www.euclideanspace.com/maths/geometry/rotations/conversions/eulerToAngle/
-def axis_xyz_axisangle_BAD(x,y,z): # wehave xyzquat xyzrotmat
-    z = heading #sms way
-    y = attitude #sems pitch
-    x = bank #sms rolll
-    c1 = np.cos(heading/2)
-    s1 = np.sin(heading/2)
-    c2 = np.cos(attitude/2)
-    s2 = np.sin(attitude/2)
-    c3 = np.cos(bank/2)
-    s3 = np.sin(bank/2)
-    c1c2 = c1*c2
-    s1s2 = s1*s2
-    w =c1c2*c3 - s1s2*s3
-    x =c1c2*s3 + s1s2*c3
-    y =s1*c2*c3 + c1*s2*s3
-    z =c1*s2*c3 - s1*c2*s3
-    angle = 2 * np.arccos(w)
-    norm = x*x+y*y+z*z
-    
-    #when all euler angles are zero angle =0 so
-    #we can set axis to anything to avoid divide by zero
-    if norm < 0.001:
-        x=1
-        y=0
-        z=0
-    else:
-        norm = np.sqrt(norm)
-        x /= norm
-        y /= norm
-        z /= norm
-    return x,y,z,angle
-
-
-#https://en.wikipedia.org/wiki/Quaternions_and_spatial_rotation
-#https://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToAngle/index.htm
-# it's backward! some says: recovering.
-def xxaxis_quat_axisangle_BAD(w,x,y,z):
-    #angle = 2 * acos(qw)
-    #diver = sqrt(1-qw*qw)
-    diver = np.sqrt(qx**2+qy**2+qz**2)
-    x = qx / diver
-    y = qy / diver
-    z = qz / diver
-    angle = 2*np.arctan2(diver,w)
-    return x,y,z,angle
-
-#the place where already axis_xyz_quat was..rip.
-
-
-def axis_axisangle_xyz_BAD(x,y,z,r):
-    3
 #--------------------------------------------axis-angle
+
+
+
+
+
+
 
 
 #--------------------------------------------utility
@@ -667,44 +648,147 @@ def axis3_front_lookat(front, pos, targetpos, ratio = 1.0):
 
 #--------------------------------------------utility
 
-x = np.random.rand(1000000).astype('float32')
-y = np.random.rand(1000000).astype('float32')
-z = np.random.rand(1000000).astype('float32')
-axis_vecquat_rotate(x,y,z, z,x,y,z)
-axis_vecquat_rotate_qpq(x,y,z, z,x,y,z)
-
-x = np.random.rand(1000000).astype('float32')
-y = np.random.rand(1000000).astype('float32')
-z = np.random.rand(1000000).astype('float32')
-t=time()
-axis_vecquat_rotate.py_func(x,y,z, z,x,y,z)
-print(time()-t,'30faster')
-
-x = np.random.rand(1000000).astype('float32')
-y = np.random.rand(1000000).astype('float32')
-z = np.random.rand(1000000).astype('float32')
-t=time()
-axis_vecquat_rotate_qpq.py_func(x,y,z, z,x,y,z)
-print(time()-t,'qpq')
-#numba
-#0.01799750328063965 30faster
-#0.034018516540527344 qpq
-
-#1core
-#0.022938966751098633 30faster
-#0.36916160583496094 qpq
 
 
-#-----------rotated front test
-front = np.zeros(3).reshape(3,1)
-front[0]=1
-pos = np.zeros(3).reshape(3,1)
-target = np.zeros(3).reshape(3,1)
-target[0]=0
-target[1]=1
-print('rotated front 1,0,0 by target 0,1,0',axis3_front_lookat( front,pos,target,0.9999) )
-#(array([0.70710678]), array([0.70710678]), array([0.]))
-#(array([-2.22044605e-16]), array([1.]), array([0.]))
+
+
+
+#-----was for the camera view matrix, hahaha!
+#NOTyet . it seems for y-up???
+@nb.jit(nopython=True , parallel = True)
+def axis_matfront_rotmat(colmat, x,y,z , ux,uy,uz):
+    """ rotmat by front.
+    from my pymatrix
+    """
+    
+    fx,fy,fz = axis_vec_normalize(x,y,z)
+    
+    #rx,ry,rz = axis_vec_cross(ux,uy,uz, x,y,z)
+    rx,ry,rz = axis_vec_cross(x,y,z, ux,uy,uz)
+    rx,ry,rz = axis_vec_normalize(rx,ry,rz)
+    #print(rx,ry,rz)
+    #right = cross(upV, front) #reversed?
+    #right = normalize(right)
+    
+    #ux,uy,uz = axis_vec_cross(x,y,z, rx,ry,rz)
+    ux,uy,uz = axis_vec_cross(rx,ry,rz, x,y,z)
+    ux,uy,uz = axis_vec_normalize(ux,uy,uz)
+    #up = cross(front, right)
+    #up = normalize(up)
+
+    colmat[0]= fx
+    colmat[1]= fy
+    colmat[2]= fz
+
+    colmat[4]= ux
+    colmat[5]= uy
+    colmat[6]= uz
+
+    colmat[8]= rx
+    colmat[9]= ry
+    colmat[10]= rz
+    return colmat
+
+
+#we well see in 3d, and all will be fine.
+#almost done seems,..,.,
+def axis_matfront_rotmat(colmat, x,y,z , ux,uy,uz):
+    """ rotmat by front for  !!GL coordinates!! 
+     front / up = 0,0,1, 0,1,0    model front see me , from screen.     
+    -z =depth=toscreen
+    AND you can see eyemat.
+    """
+    #https://stackoverflow.com/questions/18558910/direction-vector-to-rotation-matrix
+
+    
+    Dx,Dy,Dz = axis_vec_normalize(x,y,z)
+    Xx,Xy,Xz = axis_vec_cross(ux,uy,uz, Dx,Dy,Dz)
+    Xx,Xy,Xz = axis_vec_normalize(Xx,Xy,Xz)
+
+    Yx,Yy,Yz = axis_vec_cross(Dx,Dy,Dz, Xx,Xy,Xz)
+    Yx,Yy,Yz = axis_vec_normalize(Yx,Yy,Yz)
+
+    colmat[0]= Xx
+    colmat[1]= Yx
+    colmat[2]= Dx
+
+    colmat[3]= Xy
+    colmat[4]= Yy
+    colmat[5]= Dy
+
+    colmat[6]= Xz
+    colmat[7]= Yz
+    colmat[8]= Dz
+
+
+
+
+    #rotmat = axis_matfront_rotmat(colmat, 1,0,0, 0,0,1) 
+    # colmat[0]= Xy
+    # colmat[1]= Yy
+    # colmat[2]= Dy
+
+    # colmat[3]= Xz
+    # colmat[4]= Yz
+    # colmat[5]= Dz
+
+    # colmat[6]= Xx
+    # colmat[7]= Yx
+    # colmat[8]= Dx
+
+
+
+    colmat[0]= Xx
+    colmat[1]= Xz
+    colmat[2]= Yx#
+
+    colmat[3]= Dx
+    colmat[4]= Dz
+    colmat[5]= Dy#
+
+    colmat[6]= Xy#    
+    colmat[7]= Yz#
+    colmat[8]= Yy
+
+#---assume of me. since gl system yup..
+    colmat[0]= Xx
+    colmat[1]= Xz
+    colmat[2]= Xy#    
+
+    colmat[3]= Dx
+    colmat[4]= Dz
+    colmat[5]= Dy#
+
+    colmat[6]= Yx#
+    colmat[7]= Yz#
+    colmat[8]= Yy
+
+    return colmat
+
+def test_front_rotmat():
+    colmat = axis_N_colmat3x3(1)
+    X = np.ones(1)
+    Y = np.zeros(1)
+    #rotmat = axis_matfront_rotmat(colmat, X,Y,Y , 0,1,0)
+    #rotmat = axis_matfront_rotmat(colmat, X,Y,Y , Y,Y,X)
+    rotmat = axis_matfront_rotmat(colmat, 0,1,0.1, 0,1,0) #fianlly works! so, all assumes -z if depth. for GL. fine.
+    #rotmat = axis_matfront_rotmat(colmat, 1,0,0, 0,0,1) #fianlly works! so, all assumes -z if depth. for GL. fine.
+    print(rotmat)
+
+    Z=np.zeros(1)
+    O=np.ones(1)
+    #print(axis_xyz_rotmat(O*0.2,Z,Z))
+
+
+    # [[ 0.9800666 ] [ 0.19866933]
+    #  [-0.19866933][ 0.9800666 ]
+    #  [ 0.        ] 
+    # [ 0.        ]
+
+    #rotmat = axis_matfront_rotmat(colmat, 0,0,1, 0,1,0)
+    #print(axis_xyz_rotmat(Z,Z,O*0.2))
+
+
 #--------------------------------------------vector
 
 def colinear( points ):
@@ -729,7 +813,9 @@ def colinear( points ):
 #--------------------------------------------vector
 
 
-exit()
+
+
+
 
 #--------------------------------------------oop
 #from skim
@@ -746,6 +832,12 @@ exit()
 #--------------------------------------------oop
 
 
+
+
+
+
+
+
 #------------------------------------actorarray
 #------------------------------------actorarray
 
@@ -754,14 +846,14 @@ exit()
 #def ufunc_posspeed(pos,speed,acc,dt): is the prince with no nation..
 #naming via return type.  ..can assume what input should be.
 @nb.jit(nopython=True , parallel = True)
-def axis_pos(pos,speed,dt):
+def axis3_pos(pos,speed,dt):
     #hope we not use it..
     #we needit, since slicing takes littletime, but giving value to ufunc takes time.!
     pos += speed*dt
     return pos
 
 @nb.jit(nopython=True , parallel = True)
-def axis_posspeed(pos,speed,acc,dt):
+def axis3_posspeed(pos,speed,acc,dt):
     speed += acc*dt
     pos += speed*dt
     return pos,speed
@@ -863,7 +955,7 @@ class Actorarray_with_comment:
         pos = self.array[self.pos]
         speed = self.array[self.speed]
         acc = self.array[self.acc]
-        pos,speed = ufunc_posspeed(pos,speed,acc,dt)
+        pos,speed = axis3_posspeed(pos,speed,acc,dt)
         #pos = ufunc_pos(pos,speed,dt)        
 
     #@profile
@@ -871,7 +963,7 @@ class Actorarray_with_comment:
         pos = self.array[self.rpos]
         speed = self.array[self.rspeed]
         acc = self.array[self.racc]        
-        pos,speed = ufunc_posspeed#c_posspeed(pos,speed,acc,dt)
+        pos,speed = axis3_posspeed(pos,speed,acc,dt)
         #pos = ufunc_pos(pos,speed,dt)
 
     def calc_quat(self):
@@ -888,27 +980,237 @@ class Actorarray_with_comment:
         self.gpumodelmat = ufunc_modelmat(quatx,quaty,quatz,quatw) #input 4 output 16..of row.
 
 
-a=Actorarray_with_comment(100_0000)
 
-NN = a.array.shape[1]
-a.array[a.accx] = np.random.rand(NN)
-a.array[a.posupdate] = np.random.rand(NN)>0.5
-a.intarray[a.posupdate] = np.random.rand(NN)>0.5
-a.array[a.raccx] = np.random.rand(NN)
+def test_actorarray():
 
-a.update_location(0.1)
-a.update_rotation(0.1)
-print(a.array)
+    a=Actorarray_with_comment(100_0000)
 
-from time import time
+    NN = a.array.shape[1]
+    a.array[a.accx] = np.random.rand(NN)
+    a.array[a.posupdate] = np.random.rand(NN)>0.5
+    a.intarray[a.posupdate] = np.random.rand(NN)>0.5
+    a.array[a.raccx] = np.random.rand(NN)
 
-t = time()
-for i in range(99999999):
-    a.update(0.01)
-    if time()-t>1.0:
-        break
-print(i,NN,'complexed location') #62fps pos+rot 217withjit..huh? jit18fps 10M..slow!
-# 3x for .. rom maxsleed,already..
+    a.update_location(0.1)
+    a.update_rotation(0.1)
+    print(a.array)
+
+    from time import time
+
+    t = time()
+    for i in range(99999999):
+        a.update(0.01)
+        if time()-t>1.0:
+            break
+    print(i,NN,'complexed location') #62fps pos+rot 217withjit..huh? jit18fps 10M..slow!
+    # 3x for .. rom maxsleed,already..
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#=============================================test
+
+def test_front_rotmat():
+    colmat = axis_N_colmat(1)
+    X = np.ones(1)
+    Y = np.zeros(1)
+    #rotmat = axis_matfront_rotmat(colmat, X,Y,Y , 0,1,0)
+    #rotmat = axis_matfront_rotmat(colmat, X,Y,Y , Y,Y,X)
+    rotmat = xxxaxis_matfront_rotmat(colmat, 1,0,0, 0,0,1)
+    print(rotmat)
+
+
+
+def main():
+    colmat = axis_N_colmat(5)
+    X = np.random.rand(5)
+    axis_quat_rotmat(X,X,X,X)
+    axis_xyz_rotmat(X,X,X)
+    axis_matxyz_posmat(colmat,X,X,X)
+    axis_matxyz_rotmat(colmat,X,X,X)
+    axis_matxyz_scalemat(colmat,X,X,X)
+
+    axis_vec_dot(X,X,X,X,X,X)
+    axis_vec_cross(X,X,X,X,X,X)
+    axis_vec_normalize(X,X,X)
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+def test_vectorrotate_VSquq():
+    x = np.random.rand(1000000).astype('float32')
+    y = np.random.rand(1000000).astype('float32')
+    z = np.random.rand(1000000).astype('float32')
+    axis_vecquat_rotate(x,y,z, z,x,y,z)
+    axis_vecquat_rotate_qpq(x,y,z, z,x,y,z)
+
+    x = np.random.rand(1000000).astype('float32')
+    y = np.random.rand(1000000).astype('float32')
+    z = np.random.rand(1000000).astype('float32')
+    t=time()
+    axis_vecquat_rotate.py_func(x,y,z, z,x,y,z)
+    print(time()-t,'30faster')
+
+    x = np.random.rand(1000000).astype('float32')
+    y = np.random.rand(1000000).astype('float32')
+    z = np.random.rand(1000000).astype('float32')
+    t=time()
+    axis_vecquat_rotate_qpq.py_func(x,y,z, z,x,y,z)
+    print(time()-t,'qpq')
+    #numba
+    #0.01799750328063965 30faster
+    #0.034018516540527344 qpq
+
+    #1core
+    #0.022938966751098633 30faster
+    #0.36916160583496094 qpq
+
+
+def test_front_lookat():
+    #-----------rotated front test
+    front = np.zeros(3).reshape(3,1)
+    front[0]=1
+    pos = np.zeros(3).reshape(3,1)
+    target = np.zeros(3).reshape(3,1)
+    target[0]=0
+    target[1]=1
+    print('rotated front 1,0,0 by target 0,1,0',axis3_front_lookat( front,pos,target,0.9999) )
+    #(array([0.70710678]), array([0.70710678]), array([0.]))
+    #(array([-2.22044605e-16]), array([1.]), array([0.]))
+
+
+#=============================================test
+
+
+
+#xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxdump area
+
+
+#i donwanna use it..
+#BADSTATEOFME
+#the one uses atan2
+#https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+def axis_quat_xyzBAD(w,x,y,z):
+    """ xyz rpy. 
+    """
+    #roll (x-axis rotation)
+    sinr_cosp = 2 * (w * x + y * z)
+    cosr_cosp = 1 - 2 * (x * x + y * y)
+    roll = np.arctan2(sinr_cosp, cosr_cosp)
+
+    #pitch (y-axis rotation)
+    sinp = 2 * (w * y - z * x)
+    #if (std::abs(sinp) >= 1)
+    #    pitch = std::copysign(M_PI / 2, sinp) #use 90 degrees if out of range
+    #else
+    #    pitch = np.arcsin(sinp)
+
+    #yaw (z-axis rotation)
+    siny_cosp = 2 * (w * z + x * y)
+    cosy_cosp = 1 - 2 * (y * y + z * z)
+    yaw = np.arctan2(siny_cosp, cosy_cosp)
+    return roll,pitch,yaw
+
+
+
+
+#====================BELOW 2 ARE NOT COMFIRNMED . BAD STATE OF ME..
+
+#i don wanna use it too.
+#it liiks liek xyz->quat->aa./
+#actually it means quite quat like situation..
+#we do xyz_quat, quat_axisangle. fine...not fine. we needit.
+#https://www.euclideanspace.com/maths/geometry/rotations/conversions/eulerToAngle/
+def axis_xyz_axisangle_BAD(x,y,z): # wehave xyzquat xyzrotmat
+    z = heading #sms way
+    y = attitude #sems pitch
+    x = bank #sms rolll
+    c1 = np.cos(heading/2)
+    s1 = np.sin(heading/2)
+    c2 = np.cos(attitude/2)
+    s2 = np.sin(attitude/2)
+    c3 = np.cos(bank/2)
+    s3 = np.sin(bank/2)
+    c1c2 = c1*c2
+    s1s2 = s1*s2
+    w =c1c2*c3 - s1s2*s3
+    x =c1c2*s3 + s1s2*c3
+    y =s1*c2*c3 + c1*s2*s3
+    z =c1*s2*c3 - s1*c2*s3
+    angle = 2 * np.arccos(w)
+    norm = x*x+y*y+z*z
+    
+    #when all euler angles are zero angle =0 so
+    #we can set axis to anything to avoid divide by zero
+    if norm < 0.001:
+        x=1
+        y=0
+        z=0
+    else:
+        norm = np.sqrt(norm)
+        x /= norm
+        y /= norm
+        z /= norm
+    return x,y,z,angle
+
+
+#https://en.wikipedia.org/wiki/Quaternions_and_spatial_rotation
+#https://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToAngle/index.htm
+# it's backward! some says: recovering.
+def xxaxis_quat_axisangle_BAD(w,x,y,z):
+    #angle = 2 * acos(qw)
+    #diver = sqrt(1-qw*qw)
+    diver = np.sqrt(qx**2+qy**2+qz**2)
+    x = qx / diver
+    y = qy / diver
+    z = qz / diver
+    angle = 2*np.arctan2(diver,w)
+    return x,y,z,angle
+
+#the place where already axis_xyz_quat was..rip.
+
+#xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxdump area
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 #===================tips and testdata. remained.

@@ -103,7 +103,7 @@ class vec3(list):
 
 
 
-class vec3(object):
+class xvec3(object):
     def __init__(self, x,y,z):
         self.x = x
         self.y = y
@@ -225,6 +225,25 @@ def mlookat(eye,target,upV):
     v2[11] = -eye[2] #23
     return mul4x4(v1,v2)
 
+eye = vec3(0,0.5,2)
+target = vec3(0,0.5,0)
+upV = vec3(0,1,0)
+
+eye = vec3(0,0,0)
+target = vec3(0,0,-1)
+upV = vec3(0,1,0)
+mat  = mlookat(eye,target,upV)
+print(mat)
+exit()
+[1.0, 0.0, 0.0, 0.0,
+ 0.0, 1.0, 0.0, -0.5,
+  0.0, 0.0, 1.0, -2.0,
+   0.0, 0.0, 0.0, 1.0]
+
+[0.0, -1.0, 0.0, 0.0,
+ 0.0, 0.0, 1.0, 0.0, 
+ -1.0, 0.0, 0.0, 0.0,
+  0.0, 0.0, 0.0, 1.0]
 
 if __name__ == '__main__':
     fov = 50
