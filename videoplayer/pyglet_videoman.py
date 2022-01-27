@@ -5,6 +5,7 @@ from OpenGL.GL import *
 from OpenGL.GL import shaders
 import numpy as np
 import os
+import time
 #=============================== PLAYER
 
 # https://zulko.github.io/moviepy/getting_started/videoclips.html
@@ -91,7 +92,12 @@ class Audioplayer:
                 pass
             if modifiers & key.MOD_CTRL:
                 val *= 5
+            #self.pause()not this too. control in video.
             self.seek(val)
+            #time.sleep(1)
+            #self.play()
+
+            #self.seek(val+0.1) not this
         if symbol == key.LEFT:
             val = -1
             if modifiers & key.MOD_CTRL:
@@ -220,11 +226,14 @@ class Videoplayer:
     
     def update(self):
         """idx is frame idx. we get time from audio"""
-        time = self.audio.get_time()        
+        #if not self.isplaying:
+        #    return 0
+        time = self.audio.get_time()
+        #print(time)
         frameidx = int( time * self.fps )
         if not self.idx == frameidx:
             if frameidx < self.maxfps:
-                print(frameidx,time)
+                #print(frameidx,time) seems aud slips, while soundtimer-frame is bond well.
                 self.idx = frameidx
                 frame = self.video.get_data(frameidx)
                 self.frame = frame
@@ -236,20 +245,56 @@ class Videoplayer:
 
     def play_pause(self):
         if self.isplaying:
-            self.pause()
+            self._pause()
         else:
-            self.play()    
-    def play(self):
+            self._play()
+    def _play(self):
+        #this may not used again.  preventing play while playing av sync problem.
         self.isplaying = True
-        self.audio.play()
+        self.audio.play()#play while playing plays through, not play again. time but resets.
+        time.sleep(0.1)#preventing fast space-key slip.
         #self.video.play() use update_frame and get_frame each.
-    def pause(self):
+    def _pause(self):
         self.isplaying = False
         self.audio.pause()
+        time.sleep(0.1)
         #self.video.pause()
+    def seek(self,val):#seems time correct.haha.
+        if self.isplaying:
+            self._pause()
+            self.audio.seek(val)
+            time.sleep(0.2)
+            self._play()
+        else:
+            self.audio.seek(val)
+            time.sleep(0.2)
 
+    #def key(self, symbol, modifiers):
+    #    self.audio.key(symbol,modifiers)
     def key(self, symbol, modifiers):
-        self.audio.key(symbol,modifiers)
+        if symbol == key.P:
+            self.play_pause()
+        if symbol == key.SPACE:
+            self.play_pause()
+        if symbol == key.RIGHT:
+            val = 1
+            if modifiers & key.MOD_SHIFT:
+                pass
+            if modifiers & key.MOD_CTRL:
+                val *= 5
+            self.seek(val)
+        if symbol == key.LEFT:
+            val = -1
+            if modifiers & key.MOD_CTRL:
+                val *= 5
+            self.seek(val)
+        if symbol == key.UP:
+            self.audio.volup(0.1)            
+        if symbol == key.DOWN:
+            self.audio.voldown(0.1)
+        if symbol == key.T:
+            t = self.audio.get_time()
+            print(t)
 
 
 #=============================== PLAYER
@@ -258,6 +303,10 @@ class Videoplayer:
 if __name__ == '__main__':
     window = pyglet.window.Window()
     window.set_vsync(False)
+    
+    #pyglet.have_avbin=False
+    #pyglet.options['audio'] = ('pulseaudio', 'alsa', 'openal', 'silent') #this sound offs.
+
     
     vertn = """
     #version 410
@@ -313,14 +362,14 @@ if __name__ == '__main__':
 
     @window.event
     def on_mouse_press(x, y, button, modifiers):
-        print(button)
+        w,h = window.get_size()
+        print(x/w,y/h,button)
         if button == 1:
-            a.play()
+            a.play_pause()#this brings av err. while playing plays..
         if button == 4:
-            a.pause()
+            a.play_pause()
         if button == 2:
             a.play_pause()
-
 
     def update(dt):
         if not dt==0:
