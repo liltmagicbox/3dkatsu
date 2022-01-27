@@ -223,7 +223,7 @@ class Videoplayer:
         #np.flipud
         frame = frame[::-1,:]#reverse ..but slow! ..was not slow! #this remains object texsubiage2d, so ram over!
         #frame = np.flipud(frame) #but this too.
-        #frame = frame.tobytes()#this saves old frame, rip..
+        frame = frame.tobytes()#this saves old frame, rip..
         #frame = frame.copy() 1vs 0.3 slower./ use tobytes instead!
 
         texture = self.texture
@@ -244,6 +244,10 @@ class Videoplayer:
             time = self.audio.get_time()
             frameidx = int( time * self.fps )
             self.idx = rangesafe(frameidx,0,self.idxmax)
+            #print(self.idx==self.idxmax)#this detects its eos. 10s of True.haha.             
+            #if self.idx==self.idxmax:#eos, isplaying off.
+                #self.stop()#...but what about audio.. still little remained..?
+                #NO, Eos must let be happened by audio player.
 
         self.idx = rangesafe(self.idx+self.idxadder,0,self.idxmax)
         if not self.idx == self.idxlast:
@@ -288,6 +292,12 @@ class Videoplayer:
         self.isplaying = False
         self.audio.pause()
 
+    def stop(self):#pause and audio seek to 0. for reach eos.
+        """hope we  do not use it. this not resets audio. """
+        self.isplaying = False
+        self.audio.pause()
+        self.audio.seek_to(0)
+
     def seek(self,val):#seems time correct.haha.
         """NOTE: pyglet player timer goes , not from sound. so both play-play or seek whileplaying occurs broken-sync.
         now seek by idx. fine. """
@@ -301,6 +311,12 @@ class Videoplayer:
 
     def seek_frame(self,val):
         self.idx = rangesafe(self.idx+val, 0, self.idxmax)
+        print(self.idx)
+        if self.isplaying:
+            self.update_audio()
+
+    def seek_frame_to(self,val):
+        self.idx = rangesafe(val, 0, self.idxmax)
         print(self.idx)
         if self.isplaying:
             self.update_audio()
@@ -321,6 +337,8 @@ class Videoplayer:
             elif modifiers & key.MOD_CTRL:
                 self.idxadder = val
                 self.pause()#but not back.its too hard.
+                #this is for, while playing, time by player became idx, overrules.
+                #temp.pause and play again is too complex, requires another variable. so we didnt.
             else:
                 val *= 5
                 self.seek(val)
@@ -403,8 +421,9 @@ if __name__ == '__main__':
     program = shaders.compileProgram( vshader,fshader)
 
     vert_list = pyglet.graphics.vertex_list(6,
-        ('v2f', (0,0, 1,0, 1,1, 0,0, 1,1, 0,1)),
-        ('1g2f', (0,0, 1,0, 1,1, 0,0, 1,1, 0,1))
+        ('v2f', (0,0, 426,0, 426,240, 0,0, 426,240, 0,240)), #1 for shader, 100~value for pyglet-native
+        ('t2f', (0,0, 1,0, 1,1, 0,0, 1,1, 0,1))#for pyglet-native
+        #('1g2f', (0,0, 1,0, 1,1, 0,0, 1,1, 0,1)) #for shader avobe.
         )
 
 
@@ -443,8 +462,11 @@ if __name__ == '__main__':
         print(x/w,y/h,button)
         if button == 1:
             a.play_pause()#this brings av err. while playing plays..
-        if button == 4:
-            a.play_pause()
+        if button == 4:#RIGHT. to SEEK.
+            ratio = x/w
+            newframe = int( a.idxmax * ratio )
+            a.seek_frame_to(newframe)
+            
         if button == 2:
             a.play_pause()
 
@@ -459,8 +481,9 @@ if __name__ == '__main__':
     @window.event
     def on_draw():
         glClear(GL_COLOR_BUFFER_BIT)    
-        glUseProgram(program)
+        #glUseProgram(program)
 
+        glEnable(GL_TEXTURE_2D)#for pyglet-native
         glBindTexture(GL_TEXTURE_2D, a.texture)
         vert_list.draw(pyglet.gl.GL_TRIANGLES)
 
