@@ -30,9 +30,9 @@ def rangesafe(value,vmin,vmax):
     return value
 
 class Audioplayer:
-    def __init__(self,audioname, isvideo = False):
+    def __init__(self,audioname, streaming = False):
         """video requires streaming True."""
-        self.source = pyglet.media.load(audioname,streaming=isvideo)
+        self.source = pyglet.media.load(audioname,streaming=streaming)
         self.player = pyglet.media.Player()
         #self.player.queue(self.source)
 
@@ -80,6 +80,14 @@ class Audioplayer:
             #not working, infloop?
         self.player.seek(newtime)
 
+    def seek_to(self,time):
+        maxt = self.source.duration
+        mint = 0
+        newtime = rangesafe(time, mint, maxt)
+        if newtime == maxt:
+            newtime-=0.001
+        self.player.seek(newtime)
+
 
     def key(self, symbol, modifiers):
         if symbol == key.P:
@@ -97,14 +105,14 @@ class Audioplayer:
             #time.sleep(1)
             #self.play()
 
-            #self.seek(val+0.1) not this
+            #self.seek_dt(val+0.1) not this
         if symbol == key.LEFT:
             val = -1
             if modifiers & key.MOD_CTRL:
                 val *= 5
             self.seek(val)
         if symbol == key.UP:
-            self.volup(0.1)            
+            self.volup(0.1)
         if symbol == key.DOWN:
             self.voldown(0.1)
 
@@ -147,7 +155,7 @@ class Videoplayer:
             clip.audio.write_audiofile(audioname, logger=None)
         clip = None
 
-        self.audio = Audioplayer(audioname)
+        self.audio = Audioplayer(audioname,False)
 
         #use get_data or iter_data (with _pos. get_next_data)
         video = iio.get_reader(videoname)
@@ -156,7 +164,7 @@ class Videoplayer:
         duration = video.get_meta_data()['duration']
         framesa = video.count_frames()
         framesb = duration*fps
-        idxmax = int(framesb)
+        idxmax = int(framesb)-1#why..?
         
         self.video = video
         self.size = size
@@ -167,6 +175,7 @@ class Videoplayer:
         self.isplaying = False #means audio plays.
         self.idx = 0
         self.idxlast = 0
+        self.idxadder = 0#int
         self.frame = self.video.get_data(0)
         #self.texture =
         self._create_texture(self.frame)
@@ -212,8 +221,11 @@ class Videoplayer:
 
     def _update_texture(self,frame):
         #np.flipud
-        frame = frame[::-1,:]#reverse ..but slow! ..was not slow!
-        #frame = np.flipud(frame)
+        frame = frame[::-1,:]#reverse ..but slow! ..was not slow! #this remains object texsubiage2d, so ram over!
+        #frame = np.flipud(frame) #but this too.
+        #frame = frame.tobytes()#this saves old frame, rip..
+        #frame = frame.copy() 1vs 0.3 slower./ use tobytes instead!
+
         texture = self.texture
         IMG_MODE = self.IMG_MODE
         width = self.width
@@ -222,29 +234,21 @@ class Videoplayer:
         #fff= frame.tobytes()#was the man!
         #print(frame.dtype)# it works!yeah!!!
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, IMG_MODE, GL_UNSIGNED_BYTE, frame )
+        #frame = None#whaif.. no.
         glBindTexture(GL_TEXTURE_2D, 0)
         
     
     def update(self):
         """idx is frame idx. we get time from audio"""
         if self.isplaying:
-
             time = self.audio.get_time()
-            #print(time)
             frameidx = int( time * self.fps )
-            if not self.idx == frameidx:
-                if frameidx < self.idxmax:
-                    #print(frameidx,time) seems aud slips, while soundtimer-frame is bond well.
-                    self.idx = frameidx
-                    self.update_frame()
-                    #NOTE: even 139max, overs 142 when play,pause fast.
-            #print(frameidx)
+            self.idx = rangesafe(frameidx,0,self.idxmax)
 
-        else:#frame mode
-            if not self.idx == self.idxlast:
-                self.update_frame()#fine.
-                        
-
+        self.idx = rangesafe(self.idx+self.idxadder,0,self.idxmax)
+        if not self.idx == self.idxlast:
+            self.update_frame()
+            #NOTE: even 139max, overs 142 when play,pause fast.
         
     def update_frame(self):
         frameidx = self.idx
@@ -257,43 +261,55 @@ class Videoplayer:
         #self._skip_frames(index - self._pos - 1)
         #File "C:\Python39\lib\site-packages\imageio\plugins\ffmpeg.py", line 489, in _skip_frames
         #for i in range(n):
-
+    def update_audio(self):
+        #print( self.audio.get_time() ,'before')
+        self.audio.pause()
+        time.sleep(0.05)
+        t = self.idx/self.fps
+        #print(t,'seek')
+        self.audio.seek_to(t)
+        time.sleep(0.1)#preventing fast space-key slip.
+        #print( self.audio.get_time() ,'after')
+        self.audio.play()
 
     def play_pause(self):
         if self.isplaying:
-            self._pause()
+            self.pause()
         else:
-            self._play()
-    def _play(self):
+            self.play()
+    def play(self):
         #this may not used again.  preventing play while playing av sync problem.
         self.isplaying = True
-        self.audio.play()#play while playing plays through, not play again. time but resets.
-        time.sleep(0.1)#preventing fast space-key slip.
-        #self.video.play() use update_frame and get_frame each.
-    def _pause(self):
+        #self.audio.play()#play while playing plays through, not play again. time but resets.
+        #simple again.
+        self.update_audio()
+
+    def pause(self):
         self.isplaying = False
         self.audio.pause()
-        time.sleep(0.1)
-        #self.video.pause()
+
     def seek(self,val):#seems time correct.haha.
-        """NOTE: pyglet player timer goes , not from sound. so both play-play or seek whileplaying occurs broken-sync."""
-        if self.isplaying:
-            self._pause()
-            self.audio.seek(val)
-            time.sleep(0.2)
-            self._play()
+        """NOTE: pyglet player timer goes , not from sound. so both play-play or seek whileplaying occurs broken-sync.
+        now seek by idx. fine. """
+
+        frames = val*self.fps
+        self.idx = int( rangesafe(self.idx+frames, 0, self.idxmax)  )
         
-        else:#WE SETUP HERE.. frame mode.
-            frames = val*self.fps
-            #self.idx += frames
-            self.idx = int( rangesafe(self.idx+frames, 0, self.idxmax)  )
-            self.update_frame()
-            #self.audio.seek(val)
-            #time.sleep(0.2)
+        #seek but when was playing..fine.
+        if self.isplaying:
+            self.update_audio()
+
+    def seek_frame(self,val):
+        self.idx = rangesafe(self.idx+val, 0, self.idxmax)
+        print(self.idx)
+        if self.isplaying:
+            self.update_audio()
+
+
     
     #def key(self, symbol, modifiers):
     #    self.audio.key(symbol,modifiers)
-    def key(self, symbol, modifiers):
+    def on_key_press(self, symbol, modifiers):
         if symbol == key.P:
             self.play_pause()
         if symbol == key.SPACE:
@@ -301,15 +317,25 @@ class Videoplayer:
         if symbol == key.RIGHT:
             val = 1
             if modifiers & key.MOD_SHIFT:
-                pass
-            if modifiers & key.MOD_CTRL:
+                self.seek_frame(val)
+            elif modifiers & key.MOD_CTRL:
+                self.idxadder = val
+                self.pause()#but not back.its too hard.
+            else:
                 val *= 5
-            self.seek(val)
+                self.seek(val)
         if symbol == key.LEFT:
             val = -1
-            if modifiers & key.MOD_CTRL:
+            if modifiers & key.MOD_SHIFT:
+                self.seek_frame(val)
+            elif modifiers & key.MOD_CTRL:
+                #self.idxadder = val#actually its too slow.
+                #self.pause()
+                val *= 1
+                self.seek(val)
+            else:
                 val *= 5
-            self.seek(val)
+                self.seek(val)
         if symbol == key.UP:
             self.audio.volup(0.1)            
         if symbol == key.DOWN:
@@ -317,8 +343,24 @@ class Videoplayer:
         if symbol == key.T:
             t = self.audio.get_time()
             print(t)
+        if symbol == key.F:
+            print(self.idx)
 
-
+    def on_key_release(self, symbol, modifiers):
+        if symbol == key.RIGHT:
+            self.idxadder = 0
+            val = 1
+            if modifiers & key.MOD_SHIFT:
+                1
+            elif modifiers & key.MOD_CTRL:
+                self.idxadder = 0
+        if symbol == key.LEFT:
+            self.idxadder = 0
+            val = -1
+            if modifiers & key.MOD_SHIFT:
+                1
+            elif modifiers & key.MOD_CTRL:
+                self.idxadder = 0
 #=============================== PLAYER
 
 
@@ -380,7 +422,20 @@ if __name__ == '__main__':
         #print(symbol,modifiers)
         #MOD_ALT         Not available on Mac OS X
         #10 & 101 0  if modifiers & MOD_SHIFT:
-        a.key(symbol,modifiers)
+        a.on_key_press(symbol,modifiers)
+
+    @window.event
+    def on_key_release(symbol, modifiers):
+        #sym 48-57 0-9  , 97-122 a-z
+        #key no a but A
+        #normal 16, shift17, ctrl 18, alt 20
+        #MOD normal 24, shift 25, ctrl 26, alt 28.
+        # ^^^ if capslocked.hahaha.
+        #if symbol == key.W:
+        #print(symbol,modifiers)
+        #MOD_ALT         Not available on Mac OS X
+        #10 & 101 0  if modifiers & MOD_SHIFT:
+        a.on_key_release(symbol,modifiers)
 
     @window.event
     def on_mouse_press(x, y, button, modifiers):
@@ -410,7 +465,7 @@ if __name__ == '__main__':
         vert_list.draw(pyglet.gl.GL_TRIANGLES)
 
     #a = Audioplayer('summer.mp3')
-    a = Videoplayer('sync.mp4')
+    a = Videoplayer('ai8.mp4')
     pyglet.app.run()
 
 #next:
