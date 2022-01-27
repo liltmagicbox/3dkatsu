@@ -180,6 +180,18 @@ class Videoplayer:
         #self.texture =
         self._create_texture(self.frame)
 
+        #@self.audio.player.on_player_eos
+        #self.audio.player.on_player_eos = ham
+        
+        #https://www.buzzphp.com/posts/how-to-play-music-continuously-in-pyglet-using-tkinter-at-the-same-time
+        @self.audio.player.event
+        def on_player_eos():#reach empty playlist.
+            #print('nooooooo')
+            self.isplaying = False
+            #NOT self.stop or kinds.! audio player automatically stops, actually it WAS stoped and event occured.
+            #fianally it stops it's end, and do nothing. when we play again, it starts as it is first time.
+        #https://pyglet.readthedocs.io/en/latest/modules/media.html
+
     def get_time(self):
         return self.audio.get_time()
     def get_idx(self):
