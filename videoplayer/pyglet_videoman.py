@@ -156,16 +156,17 @@ class Videoplayer:
         duration = video.get_meta_data()['duration']
         framesa = video.count_frames()
         framesb = duration*fps
-        maxfps = int(framesb)
+        idxmax = int(framesb)
         
         self.video = video
         self.size = size
         self.fps = fps
         self.duration = duration
-        self.maxfps = maxfps
+        self.idxmax = idxmax
         
-        self.isplaying = False
+        self.isplaying = False #means audio plays.
         self.idx = 0
+        self.idxlast = 0
         self.frame = self.video.get_data(0)
         #self.texture =
         self._create_texture(self.frame)
@@ -226,22 +227,37 @@ class Videoplayer:
     
     def update(self):
         """idx is frame idx. we get time from audio"""
-        #if not self.isplaying:
-        #    return 0
-        time = self.audio.get_time()
-        #print(time)
-        frameidx = int( time * self.fps )
-        if not self.idx == frameidx:
-            if frameidx < self.maxfps:
-                #print(frameidx,time) seems aud slips, while soundtimer-frame is bond well.
-                self.idx = frameidx
-                frame = self.video.get_data(frameidx)
-                self.frame = frame
-                self._update_texture(frame)
-                #NOTE: even 139max, overs 142 when play,pause fast.
-        #print(frameidx)
+        if self.isplaying:
+
+            time = self.audio.get_time()
+            #print(time)
+            frameidx = int( time * self.fps )
+            if not self.idx == frameidx:
+                if frameidx < self.idxmax:
+                    #print(frameidx,time) seems aud slips, while soundtimer-frame is bond well.
+                    self.idx = frameidx
+                    self.update_frame()
+                    #NOTE: even 139max, overs 142 when play,pause fast.
+            #print(frameidx)
+
+        else:#frame mode
+            if not self.idx == self.idxlast:
+                self.update_frame()#fine.
+                        
 
         
+    def update_frame(self):
+        frameidx = self.idx
+        self.idxlast = frameidx
+        frame = self.video.get_data(frameidx)
+        self.frame = frame
+        self._update_texture(frame)
+        
+        #----get_data, ffmpeg dose..
+        #self._skip_frames(index - self._pos - 1)
+        #File "C:\Python39\lib\site-packages\imageio\plugins\ffmpeg.py", line 489, in _skip_frames
+        #for i in range(n):
+
 
     def play_pause(self):
         if self.isplaying:
@@ -260,15 +276,21 @@ class Videoplayer:
         time.sleep(0.1)
         #self.video.pause()
     def seek(self,val):#seems time correct.haha.
+        """NOTE: pyglet player timer goes , not from sound. so both play-play or seek whileplaying occurs broken-sync."""
         if self.isplaying:
             self._pause()
             self.audio.seek(val)
             time.sleep(0.2)
             self._play()
-        else:
-            self.audio.seek(val)
-            time.sleep(0.2)
-
+        
+        else:#WE SETUP HERE.. frame mode.
+            frames = val*self.fps
+            #self.idx += frames
+            self.idx = int( rangesafe(self.idx+frames, 0, self.idxmax)  )
+            self.update_frame()
+            #self.audio.seek(val)
+            #time.sleep(0.2)
+    
     #def key(self, symbol, modifiers):
     #    self.audio.key(symbol,modifiers)
     def key(self, symbol, modifiers):
