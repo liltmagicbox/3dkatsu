@@ -1,4 +1,6 @@
 import pyglet
+from pyglet.window import key
+
 import moviepy.editor as mpy
 import imageio as iio
 from OpenGL.GL import *
@@ -212,7 +214,10 @@ class Videoplayer:
 
         #(1080, 1920, 3)
         height,width,depth = frame.shape
-        
+        # if depth == 3:
+        #     alpha = (np.ones(height*width,dtype='uint8')*255).reshape(height,width)
+        #     frame = np.dstack( [ frame,alpha])
+
         IMG_MODE = GL_RGB
         if rgb == 'RGB':
             IMG_MODE = GL_RGB
@@ -224,6 +229,9 @@ class Videoplayer:
             #IMG_MODE = GL_RGB
         #elif depth == 4:
             #IMG_MODE = GL_RGBA
+
+        frame = frame.tobytes()
+        # IMG_MODE = GL_RGBA
         glTexImage2D(GL_TEXTURE_2D, 0, IMG_MODE, width, height, 0, IMG_MODE, GL_UNSIGNED_BYTE, frame )#level, border=0
         glBindTexture(GL_TEXTURE_2D, 0)
         self.IMG_MODE = IMG_MODE
@@ -232,6 +240,11 @@ class Videoplayer:
         self.height = height
 
     def _update_texture(self,frame):
+        # height,width,depth = frame.shape
+        # if depth == 3:
+        #     alpha = (np.ones(height*width,dtype='uint8')*255).reshape(height,width)
+        #     frame = np.dstack( [ frame,alpha])
+
         #np.flipud
         frame = frame[::-1,:]#reverse ..but slow! ..was not slow! #this remains object texsubiage2d, so ram over!
         #frame = np.flipud(frame) #but this too.
@@ -391,6 +404,10 @@ class Videoplayer:
                 1
             elif modifiers & key.MOD_CTRL:
                 self.idxadder = 0
+
+    def ratio_jump(self,ratio):
+        newframe = int( self.idxmax * ratio )
+        self.seek_frame_to(newframe)
 #=============================== PLAYER
 
 
@@ -440,8 +457,7 @@ if __name__ == '__main__':
 
 
 
-    from pyglet.window import key
-
+    
     @window.event
     def on_key_press(symbol, modifiers):
         #sym 48-57 0-9  , 97-122 a-z
@@ -476,11 +492,10 @@ if __name__ == '__main__':
             a.play_pause()#this brings av err. while playing plays..
         if button == 4:#RIGHT. to SEEK.
             ratio = x/w
-            newframe = int( a.idxmax * ratio )
-            a.seek_frame_to(newframe)
+            a.ratio_jump(ratio)            
             
-        if button == 2:
-            a.play_pause()
+        # if button == 2:
+        #     a.play_pause()
 
     def update(dt):
         if not dt==0:
@@ -500,7 +515,7 @@ if __name__ == '__main__':
         vert_list.draw(pyglet.gl.GL_TRIANGLES)
 
     #a = Audioplayer('summer.mp3')
-    a = Videoplayer('ai8.mp4')
+    a = Videoplayer('bibitokita.mp4')
     pyglet.app.run()
 
 #next:
