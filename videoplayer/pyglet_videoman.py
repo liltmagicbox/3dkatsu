@@ -8,6 +8,89 @@ from OpenGL.GL import shaders
 import numpy as np
 import os
 import time
+
+
+
+
+
+
+class TEXTURE_2X:
+    def __init__(self, width,height, FORMAT = GL_RGB ):
+        a = TEXTURE_NOMIPMAP(width,height, FORMAT)
+        b = TEXTURE_NOMIPMAP(width,height, FORMAT)
+        self.list = [a,b]
+        self.idx = 0
+
+        self.FORMAT = FORMAT
+        self.width = width
+        self.height = height
+    def bind(self):#bind flips first. load last-drawn. ..actually bind to manytimes, flips too much.bad.
+        texture = self.list[self.idx]
+        texture.bind()#how clever!
+    def unbind(self):
+        glBindTexture(GL_TEXTURE_2D, 0)
+    def update(self,data):# update exactly happend when new idx draw..yeah. it's the point!
+        self.flip()
+        texture = self.list[self.idx]
+        texture.update(data)
+    def flip(self):
+        self.idx = (self.idx+1)%2
+
+
+
+
+
+
+class TEXTURE_NOMIPMAP:
+    def __init__(self, width,height, FORMAT = GL_RGB ):
+        """format GL_RGB,GL_RGBA,GL_BGR,GL_BGRA"""
+        texture = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, texture)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)#GL_NEAREST
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)            
+        glTexImage2D(GL_TEXTURE_2D, 0, FORMAT, width, height, 0, FORMAT, GL_UNSIGNED_BYTE, None)#level, border=0
+        glBindTexture(GL_TEXTURE_2D, 0)
+
+        self.id = texture
+        self.FORMAT = FORMAT
+        self.width = width
+        self.height = height
+    
+        #(1080, 1920, 3)
+        #height,width,depth = frame.shape
+        # if depth == 3:
+        #     alpha = (np.ones(height*width,dtype='uint8')*255).reshape(height,width)
+        #     frame = np.dstack( [ frame,alpha])    
+        #if depth == 3:
+            #IMG_MODE = GL_RGB
+        #elif depth == 4:
+            #IMG_MODE = GL_RGBA
+
+    def update(self,data):
+        """data np arr(height,width,depth4)
+        NOTE: data will be data.tobyte()ed. if not remain permanent GPU RAM"""
+        glBindTexture(GL_TEXTURE_2D, self.id)
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, self.width, self.height, self.FORMAT, GL_UNSIGNED_BYTE, data.tobytes() )
+        glBindTexture(GL_TEXTURE_2D, 0)
+        #frame = frame[::-1,:]#reverse ..but slow! ..was not slow! #this remains object texsubiage2d, so ram over!
+        #frame = np.flipud(frame) #but this too.
+        #frame = frame.tobytes()#this saves old frame, rip..
+        #frame = frame.copy() 1vs 0.3 slower. use tobytes.
+    def update_ud(self,data):
+        """ remember [::-1,:]"""
+        glBindTexture(GL_TEXTURE_2D, self.id)
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, self.width, self.height, self.FORMAT, GL_UNSIGNED_BYTE, data[::-1,:].tobytes() )
+        glBindTexture(GL_TEXTURE_2D, 0)
+    def bind(self):
+        glBindTexture(GL_TEXTURE_2D, self.id)
+    def unbind(self):
+        glBindTexture(GL_TEXTURE_2D, 0)
+
+
+
+
+
+
 #=============================== PLAYER
 
 # https://zulko.github.io/moviepy/getting_started/videoclips.html
@@ -180,7 +263,10 @@ class Videoplayer:
         self.idxadder = 0#int
         self.frame = self.video.get_data(0)
         #self.texture =
-        self._create_texture(self.frame)
+        height,width,depth = self.frame.shape
+        
+        #self.texture = TEXTURE_NOMIPMAP(width,height)
+        self.texture = TEXTURE_2X(width,height)
 
         #@self.audio.player.on_player_eos
         #self.audio.player.on_player_eos = ham
@@ -205,64 +291,17 @@ class Videoplayer:
         """updated by update"""
         return self.texture
 
-    def _create_texture(self,frame, rgb = 'RGBA'):#says rgba 20x faster..
-        frame = frame[::-1,:]#reverse
-        texture = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, texture)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)#GL_NEAREST
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-
-        #(1080, 1920, 3)
-        height,width,depth = frame.shape
-        # if depth == 3:
-        #     alpha = (np.ones(height*width,dtype='uint8')*255).reshape(height,width)
-        #     frame = np.dstack( [ frame,alpha])
-
-        IMG_MODE = GL_RGB
-        if rgb == 'RGB':
-            IMG_MODE = GL_RGB
-        elif rgb == 'BGR':
-            IMG_MODE = GL_BGR
-        elif rgb == 'BGRA':
-            IMG_MODE = GL_BGRA
-        #if depth == 3:
-            #IMG_MODE = GL_RGB
-        #elif depth == 4:
-            #IMG_MODE = GL_RGBA
-
-        frame = frame.tobytes()
-        # IMG_MODE = GL_RGBA
-        glTexImage2D(GL_TEXTURE_2D, 0, IMG_MODE, width, height, 0, IMG_MODE, GL_UNSIGNED_BYTE, frame )#level, border=0
-        glBindTexture(GL_TEXTURE_2D, 0)
-        self.IMG_MODE = IMG_MODE
-        self.texture = texture
-        self.width = width
-        self.height = height
+    #def set_videotexture(self):
+    #    print(self.idx)
 
     def _update_texture(self,frame):
-        # height,width,depth = frame.shape
-        # if depth == 3:
-        #     alpha = (np.ones(height*width,dtype='uint8')*255).reshape(height,width)
-        #     frame = np.dstack( [ frame,alpha])
-
-        #np.flipud
         frame = frame[::-1,:]#reverse ..but slow! ..was not slow! #this remains object texsubiage2d, so ram over!
-        #frame = np.flipud(frame) #but this too.
-        frame = frame.tobytes()#this saves old frame, rip..
-        #frame = frame.copy() 1vs 0.3 slower./ use tobytes instead!
+        self.texture.update(frame)
+    #def _create_texture(self,frame ):#says rgba 20x faster..
+    #    #frame = frame[::-1,:]#reverse
+    #    width,height,depth = frame.shape
+    #    self.texture = TEXTURE_NOMIPMAP(width,height)
 
-        texture = self.texture
-        IMG_MODE = self.IMG_MODE
-        width = self.width
-        height = self.height
-        glBindTexture(GL_TEXTURE_2D, texture)
-        #fff= frame.tobytes()#was the man!
-        #print(frame.dtype)# it works!yeah!!!
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, IMG_MODE, GL_UNSIGNED_BYTE, frame )
-        #frame = None#whaif.. no.
-        glBindTexture(GL_TEXTURE_2D, 0)
-        
-    
     def update(self):
         """idx is frame idx. we get time from audio"""
         if self.isplaying:
@@ -511,7 +550,9 @@ if __name__ == '__main__':
         #glUseProgram(program)
 
         glEnable(GL_TEXTURE_2D)#for pyglet-native
-        glBindTexture(GL_TEXTURE_2D, a.texture)
+        #glBindTexture(GL_TEXTURE_2D, a.texture.id)
+        #a.set_videotexture()
+        a.texture.bind()
         vert_list.draw(pyglet.gl.GL_TRIANGLES)
 
     #a = Audioplayer('summer.mp3')
