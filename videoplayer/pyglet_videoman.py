@@ -9,13 +9,71 @@ import numpy as np
 import os
 import time
 
+from PIL import Image
 
+class PBO:
+    def __init__(self):
+        """we may not use it, since it requires mem address write!
+        and the api not support subtex2d by offset. """
+        #http://www.songho.ca/opengl/gl_pbo.html#pack
+        #GL_PIXEL_PACK_BUFFER to get data from opengl.
+        #PBO unpacks to texture or FBO.
 
+        #--- create texture
+        width = 1920
+        height = 1080
+        data = (np.random.rand(width*height*3).reshape(height,width,3)*255).astype('uint8')
+        FORMAT = GL_RGB
+        texture = glGenTextures(1)     
+        glBindTexture(GL_TEXTURE_2D, texture)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)#GL_NEAREST
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, FORMAT, GL_UNSIGNED_BYTE, None)#level, border=0
+        
+        #--- you can put data, but it's not the way we do now.
+        #glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, FORMAT, GL_UNSIGNED_BYTE, data)#level, border=0        
+        #glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, FORMAT, GL_UNSIGNED_BYTE, data )        
+        
 
+        #--- crteate buffer object, which bound to PIXEL UNPACK BUFFER
+        pbo = glGenBuffers(1)
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo)
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, data.nbytes, None, GL_STREAM_DRAW)#yeah. None.
+        #glBufferData(GL_PIXEL_UNPACK_BUFFER, vertices.nbytes, 0, GL_STREAM_DRAW) #0? None? to just set memory..
+        #glBufferSubData  we can offset.. a(GL_ARRAY_BUFFER, 24, sizeof(data), &data)
+        #GL_STATIC_DRAW was of VAO.          #what about dynamic draw??
+        #GL_STREAM_DRAW is for streaming texture upload
+        #GL_STREAM_READ for asynchronous framebuffer read-back.
+
+        #seems this api not 0:by offset . input only data address.
+        #copy pixels from PBO to texture object
+        #glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, FORMAT, GL_UNSIGNED_BYTE, 0 )#Use offset instead of ponter
+        #ctypes.c_ubyte c_ubyte(0)
+
+        
+        #--- map buffer . gpu bound buffer -> locate somewhere cpu-mem. we cannot target, but address returned.
+        #http://pyopengl.sourceforge.net/documentation/manual-3.0/glMapBuffer.html
+        #access : GL_READ_ONLY , GL_WRITE_ONLY , or GL_READ_WRITE .
+        address = glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY)
+        #returns current bound buffer's memory pointer        
+        
+        #than, write data by :
+        #memcpy(ptr, data, sizeof(data)); aha!
+        #address is really memory adress,, address[0]=255,0,0 kinds we need, maybe??..yes.
+
+        #seems actgually returns boid..
+        #print(address,'isboid??')
+        #if address:
+            #update(address, data_size) #this actually writes data to mem address. python i don want it.
+            #glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER)            
+        
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0)
+        self.texture = texture
 
 
 class TEXTURE_2X:
     def __init__(self, width,height, FORMAT = GL_RGB ):
+        """create and update(data). bind to use. update has flip, at now. hope update not frequently."""
         a = TEXTURE_NOMIPMAP(width,height, FORMAT)
         b = TEXTURE_NOMIPMAP(width,height, FORMAT)
         self.list = [a,b]
@@ -35,6 +93,8 @@ class TEXTURE_2X:
         texture.update(data)
     def flip(self):
         self.idx = (self.idx+1)%2
+    def get_texture(self):#hope we do not use it..
+        return self.list[self.idx]
 
 
 
@@ -48,13 +108,22 @@ class TEXTURE_NOMIPMAP:
         glBindTexture(GL_TEXTURE_2D, texture)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)#GL_NEAREST
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)            
-        glTexImage2D(GL_TEXTURE_2D, 0, FORMAT, width, height, 0, FORMAT, GL_UNSIGNED_BYTE, None)#level, border=0
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, FORMAT, GL_UNSIGNED_BYTE, None)#level, border=0
+        #glTexImage2D(GL_TEXTURE_2D, 0, GPU_FORMAT, width, height, 0, INPUT_DATA_FORMAT, GL_UNSIGNED_BYTE, None)#level, border=0
+        #first format  texture's image format
+        #last 3 how data stored ::: GL_RGBA, GL_UNSIGNED_BYTE, pixels
+        #Note that GL_BGRA pixel transfer format is only preferred when uploading to GL_RGBA8 images
+        #gpu internally stores BGRA way, even 3rd format is GL_RGBA8. internally.
+        #so, it's better to delever pixel data as GL_BGRA directly.
+        #but gpu store is GL_RGBA16, GL_RGBA8UI or even GL_RGBA8_SNORM, then the regular GL_RGBA ordering may be preferred.
+        #fine.
         glBindTexture(GL_TEXTURE_2D, 0)
 
         self.id = texture
         self.FORMAT = FORMAT
         self.width = width
         self.height = height
+        self.cons = []
     
         #(1080, 1920, 3)
         #height,width,depth = frame.shape
@@ -70,17 +139,40 @@ class TEXTURE_NOMIPMAP:
         """data np arr(height,width,depth4)
         NOTE: data will be data.tobyte()ed. if not remain permanent GPU RAM"""
         glBindTexture(GL_TEXTURE_2D, self.id)
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, self.width, self.height, self.FORMAT, GL_UNSIGNED_BYTE, data.tobytes() )
-        glBindTexture(GL_TEXTURE_2D, 0)
+        #dd = data.tobytes()#takes 26ms! for 1080p. wow.
+        
+        #way 0
+        #directly out data, but memory increases too fast. but 3ms of texsubimg is the only cost.
+
+        #way 1
+        # arr.tobytes()
+        #it also seemed to bond with texture, but it's safe. so as it will be like empty_like..
+        #dd = data.copy()
+        #is even slower than tobytes().
+
+        #way 2
+        #finally! 1ms! we create fastest empty, and copy to data.. and stores a np array, not eachtime.
+        t = time.time()
+        dd = np.empty_like(data)
+        #print(dd.data) #WOW! it holds same mem address! you may se   <memory at 0x000001C14227FD60> like x10000..
+        #np.copyto(dst,data)
+        np.copyto(dd,data)
+        #self.cons.append(time.time()-t)
+        #---maybe it's internal value , as this func ends, dd ends too..        
+
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, self.width, self.height, self.FORMAT, GL_UNSIGNED_BYTE, dd )
+        #glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, self.width, self.height, self.FORMAT, GL_UNSIGNED_BYTE, data.tobytes() )
+        glBindTexture(GL_TEXTURE_2D, 0)        
+        print(time.time()-t,'texsubimg')
         #frame = frame[::-1,:]#reverse ..but slow! ..was not slow! #this remains object texsubiage2d, so ram over!
         #frame = np.flipud(frame) #but this too.
         #frame = frame.tobytes()#this saves old frame, rip..
-        #frame = frame.copy() 1vs 0.3 slower. use tobytes.
+        #frame = frame.copy() 1vs 0.3 slower. use tobytes.        
+
+        
     def update_ud(self,data):
-        """ remember [::-1,:]"""
-        glBindTexture(GL_TEXTURE_2D, self.id)
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, self.width, self.height, self.FORMAT, GL_UNSIGNED_BYTE, data[::-1,:].tobytes() )
-        glBindTexture(GL_TEXTURE_2D, 0)
+        fliped = data[::-1,:]
+        self.update(fliped)        
     def bind(self):
         glBindTexture(GL_TEXTURE_2D, self.id)
     def unbind(self):
@@ -116,7 +208,8 @@ def rangesafe(value,vmin,vmax):
 
 class Audioplayer:
     def __init__(self,audioname, streaming = False):
-        """video requires streaming True."""
+        """video requires streaming True.
+        #if not streaming, audio sync offs. """
         self.source = pyglet.media.load(audioname,streaming=streaming)
         self.player = pyglet.media.Player()
         #self.player.queue(self.source)
@@ -247,9 +340,9 @@ class Videoplayer:
         size = video.get_meta_data()['size']
         fps = video.get_meta_data()['fps']
         duration = video.get_meta_data()['duration']
-        framesa = video.count_frames()
+        framesa = video.count_frames() #normally this is the count.exact. idx=count-1
         framesb = duration*fps
-        idxmax = int(framesb)-1#why..?
+        idxmax = int(framesb)-1#why..? ah, if not broken, it overs still. -2 required!
         
         self.video = video
         self.size = size
@@ -267,6 +360,7 @@ class Videoplayer:
         
         #self.texture = TEXTURE_NOMIPMAP(width,height)
         self.texture = TEXTURE_2X(width,height)
+        self.texture.update(self.frame)
 
         #@self.audio.player.on_player_eos
         #self.audio.player.on_player_eos = ham
@@ -289,7 +383,7 @@ class Videoplayer:
         return self.frame
     def get_texture(self):
         """updated by update"""
-        return self.texture
+        return self.texture.get_texture()
 
     #def set_videotexture(self):
     #    print(self.idx)
@@ -321,7 +415,9 @@ class Videoplayer:
     def update_frame(self):
         frameidx = self.idx
         self.idxlast = frameidx
+        t=time.time()
         frame = self.video.get_data(frameidx)
+        print( time.time()-t ,'gettime')
         self.frame = frame
         self._update_texture(frame)
         
@@ -493,7 +589,11 @@ if __name__ == '__main__':
         ('t2f', (0,0, 1,0, 1,1, 0,0, 1,1, 0,1))#for pyglet-native
         #('1g2f', (0,0, 1,0, 1,1, 0,0, 1,1, 0,1)) #for shader avobe.
         )
-
+    vert_list2 = pyglet.graphics.vertex_list(6,
+        ('v2f', (426,240, 560,240, 560,400, 426,240, 560,400, 426,400)), #1 for shader, 100~value for pyglet-native
+        ('t2f', (0,0, 1,0, 1,1, 0,0, 1,1, 0,1))#for pyglet-native
+        #('1g2f', (0,0, 1,0, 1,1, 0,0, 1,1, 0,1)) #for shader avobe.
+        )
 
 
     
@@ -509,6 +609,13 @@ if __name__ == '__main__':
         #MOD_ALT         Not available on Mac OS X
         #10 & 101 0  if modifiers & MOD_SHIFT:
         a.on_key_press(symbol,modifiers)
+        if symbol == key.R:
+            data = np.empty(1920*1080*4).reshape(1080,1920,4).astype('uint8')
+            glReadPixels(0,0,1920,1080,GL_RGBA,GL_UNSIGNED_BYTE, data)
+            im = Image.fromarray(data)
+            im.save(f"ham.png")
+            print('read pixel and saved ham.png')
+            #print(data)
 
     @window.event
     def on_key_release(symbol, modifiers):
@@ -522,6 +629,7 @@ if __name__ == '__main__':
         #MOD_ALT         Not available on Mac OS X
         #10 & 101 0  if modifiers & MOD_SHIFT:
         a.on_key_release(symbol,modifiers)
+
 
     @window.event
     def on_mouse_press(x, y, button, modifiers):
@@ -546,18 +654,42 @@ if __name__ == '__main__':
         
     @window.event
     def on_draw():
-        glClear(GL_COLOR_BUFFER_BIT)    
+        glClear(GL_COLOR_BUFFER_BIT)
         #glUseProgram(program)
-
         glEnable(GL_TEXTURE_2D)#for pyglet-native
+        
         #glBindTexture(GL_TEXTURE_2D, a.texture.id)
         #a.set_videotexture()
         a.texture.bind()
         vert_list.draw(pyglet.gl.GL_TRIANGLES)
 
+        #a.texture.unbind()
+        glBindTexture(GL_TEXTURE_2D, 0)
+
+        #both can not help. i hope d.buffer swap auto does..
+        #glFlush()
+        #glFinish()
+        
+        #glBindTexture(GL_TEXTURE_2D, pbo.texture)
+        #vert_list2.draw(pyglet.gl.GL_TRIANGLES)
+
+        #t=time.time()
+        #np.
+        #print(time.time()-t,'just array!!')
+
+
+
     #a = Audioplayer('summer.mp3')
-    a = Videoplayer('bibitokita.mp4')
+    
+    a = Videoplayer('aa.mkv')
     pyglet.app.run()
+
+    #  <memory at 0x000001A23390FD60> seems not worthy..
+
+    #print( a.texture.list[0].cons )
+    #print( sum( a.texture.list[0].cons ) )
+    #for i in a.texture.list[0].cons:
+    #    print(i.data)
 
 #next:
 # buffer image / mp3 direct ram load pyglet.
