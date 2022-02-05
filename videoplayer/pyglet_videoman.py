@@ -11,6 +11,34 @@ import time
 
 from PIL import Image
 
+import queue
+import threading
+
+
+
+def nonono(self):
+    while queue.qsize()<5:
+        frame = self.video.get_data(idx)
+        queue.put(frame)
+
+class VideoGetter:
+    def __init__(self, video):
+        self.video = video
+        self.queue = queue.Queue()
+        self.event = threading.Event()
+        #self.idx = 0
+        self.video.get_data(0)
+        self.framequeue.put(self.frame)
+        #self.framequeue.get(False)#block=False
+        self.idx
+    def _get(self):
+        1
+    def next(self):
+        self.idx+=1
+        self.video.get_data(self.idx)
+    def jump_to(self, idx):
+        """flush queue"""
+
 class PBO:
     def __init__(self):
         """we may not use it, since it requires mem address write!
@@ -225,10 +253,11 @@ class Audioplayer:
         else:
             self.player.play()
     def pause(self):
+        #player.playing is player internal.. fine.
         self.player.pause()
 
     def play_pause(self):
-        if self.player.playing:            
+        if self.player.playing:
             self.pause()
         else:
             self.play()
@@ -354,13 +383,21 @@ class Videoplayer:
         self.idx = 0
         self.idxlast = 0
         self.idxadder = 0#int
+        
+        #frame >> queue. for threading. queue thread safe.
+        self.framequeue = queue.Queue()
         self.frame = self.video.get_data(0)
+        self.framequeue.put(self.frame)
+        #self.framequeue.get(False)#block=False,timeout=None. blockFalse not seems good.
+
+
         #self.texture =
         height,width,depth = self.frame.shape
         
-        #self.texture = TEXTURE_NOMIPMAP(width,height)
-        self.texture = TEXTURE_2X(width,height)
+        self.texture = TEXTURE_NOMIPMAP(width,height)
+        #self.texture = TEXTURE_2X(width,height)
         self.texture.update(self.frame)
+
 
         #@self.audio.player.on_player_eos
         #self.audio.player.on_player_eos = ham
@@ -373,17 +410,18 @@ class Videoplayer:
             #NOT self.stop or kinds.! audio player automatically stops, actually it WAS stoped and event occured.
             #fianally it stops it's end, and do nothing. when we play again, it starts as it is first time.
         #https://pyglet.readthedocs.io/en/latest/modules/media.html
-
+    
     def get_time(self):
         return self.audio.get_time()
     def get_idx(self):
         return self.idx
     def get_frame(self):
         """returns np array"""
-        return self.frame
+        return self.frame #now change to queue.. but we need store it.        
+
     def get_texture(self):
         """updated by update"""
-        return self.texture.get_texture()
+        return self.texture.get_texture()#for texture2x. wecannot texture.id directly.
 
     #def set_videotexture(self):
     #    print(self.idx)
@@ -411,15 +449,84 @@ class Videoplayer:
         if not self.idx == self.idxlast:
             self.update_frame()
             #NOTE: even 139max, overs 142 when play,pause fast.
+
+    def xxxxnonono(self):
+        event = threading.Event()
+        return event
+        event.set()
+
+        while not event.is_set() and queue.qsize()<5:
+            frame = video.get_data(idx)
+            queue.put(frame)
+            idx+=1
+    def xxxx_create_frame_thread(self, video, idx, queue):
+        queue = self.framequeue
+        getargs = (queue)
+        th = threading.Thread(target= self._fill_frame,args=getargs )
+        th.start()
+        return th
+
+    def xxxx_fill_frame(self,queue):
+        t=time.time()
+        frame = video.get_data(idx)
+        queue.put(frame)
+        print( time.time()-t ,'gettime')
+        #return 0
+
+
+    def _get_data_thread(self, video, idx, queue):
+        #we stop player here. since time gose, but trace too slow. seek itself takes time.!
+        #self.audio.pause()
+        #self.audio.play()
+        #no! no good this!
+        t=time.time()
+        #self.framequeue.join()#count++
+        frame = video.get_data(idx)
+        #print('got',time.time())#when empty queue, it 300ms
+        queue.put(frame)
+        print( time.time()-t ,'gettime')
+        #return 0
         
     def update_frame(self):
         frameidx = self.idx
         self.idxlast = frameidx
-        t=time.time()
-        frame = self.video.get_data(frameidx)
-        print( time.time()-t ,'gettime')
+
+        #oldway
+        #newframe = self.video.get_data(idx)
+        #self.frame = frame
+        #self._update_texture(self.frame)
+
+        #what i wanted
+        #lock queue
+        #run thread
+        #in thread, after done, task_done(unlick)
+        #so queue locked only inter-get_data task.. but it completely stops!
+
+        #current
+        # get frame,
+        # thread go, before wecan see time
+        # in thread, after getdata, see time.
+        #time took 300ms when queue is empty. (move backward while playing)
+
+
+        #with thread
+        frame = self.framequeue.get() #this waits until filled. fine.. slow better err
         self.frame = frame
-        self._update_texture(frame)
+        
+        #if queue safe, do.
+        #imagine readtime 80ms, we open 2 thread, open 2 ffmpeg. err!        
+        #self.framequeue.join()#count++
+        #print('getting',time.time()) #when empty queue, it 300ms
+        getargs = (self.video, frameidx, self.framequeue)
+        th = threading.Thread(target= self._get_data_thread,args=getargs )
+        th.start()
+        #th.join()#for wait
+
+        #self.framequeue.task_done()
+        self._update_texture(self.frame)
+
+
+        #yes, it delays a frame, actually. we store t(-1) first.
         
         #----get_data, ffmpeg dose..
         #self._skip_frames(index - self._pos - 1)
@@ -480,6 +587,10 @@ class Videoplayer:
         print(self.idx)
         if self.isplaying:
             self.update_audio()
+
+    def next(self):
+        """safe idx+=1. not resets queue."""
+
 
 
     
@@ -612,8 +723,14 @@ if __name__ == '__main__':
         if symbol == key.R:
             data = np.empty(1920*1080*4).reshape(1080,1920,4).astype('uint8')
             glReadPixels(0,0,1920,1080,GL_RGBA,GL_UNSIGNED_BYTE, data)
+            data= data[:,:,:3] #cannot write mode RGBA as JPEG
+            print(data.shape)
             im = Image.fromarray(data)
-            im.save(f"ham.png")
+            t=time.time()
+            #im.save(f"ham.bmp") #NOTE: png took 60ms while jpg 5ms.! bmp 5ms also.
+            #im.save('q95.jpg', quality=95)
+            im.save('q100sub0.jpg', quality=100, subsampling=0)
+            print(time.time()-t,'savetime')
             print('read pixel and saved ham.png')
             #print(data)
 
