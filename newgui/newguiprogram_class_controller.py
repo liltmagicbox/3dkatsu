@@ -769,7 +769,7 @@ keymap_camera = {
 
 mousemap = {'1': 'M_LEFT', '2':'M_MIDDLE', '4':'M_RIGHT'}#hope all system same..
 
-class InputLayer:#fianlly!--was changed . input handler - and controller.
+class xxxInputLayer:#fianlly!--was changed . input handler - and controller.
     """ packs input events and deliver to Controller."""
     def __init__(self):
         world=cam
@@ -998,111 +998,267 @@ class InputLayer:#fianlly!--was changed . input handler - and controller.
 
 
 
+# AI UI ID all capital.
+# classinstance = ClassName()
+# def func_tion
+# ismousefree = True
 
-class InputLayer:#fianlly!--was changed . input handler - and controller.
-    """ packs input events and deliver to Controller."""
+
+
+def symbol_to_key(symbol, modifiers):
+    """ translate keyboard,mouse input, to use directly keymap={'W':do_func}.
+
+
+    :param symbol: keyboard,mouse button (not for the state of drag 1+4=5.)
+    :param modifiers: CTRL(1st), LSHIFT only.
+    :returns: key. W W+CTRL M_LEFT...
+    """
+    
+    #======================symbol
+    key = pyglet.window.key.symbol_string(symbol)
+    #'1' if mouse button 1.  key.symbol_string(49) > "_1"
+    
+    #-----mouse buttons int 1,2,4    
+    if symbol == 1:
+        key = "M_LEFT"
+    elif symbol == 2:
+        key = "M_MIDDLE"
+    elif symbol == 4:
+        key = "M_RIGHT"
+    
+    #------keyboard number 48 0 57 9  
+    elif 48 <= symbol <=57:            
+        key = key[1]# '_0' to '0'
+        print(key,'seenumberkeyboard')
+
+    #======================modifiers
+    #simple mod. ctrl advantaged.
+    #key.modifiers_string(65505)
+    #'MOD_SHIFT|MOD_SCROLLLOCK|MOD_COMMAND|MOD_OPTION|MOD_FUNCTION'
+    mod = ''
+    if modifiers & pyglet.window.key.LCTRL:
+        mod = 'LCTRL'
+    elif modifiers & pyglet.window.key.LSHIFT:
+        mod = 'LSHIFT'
+    if mod:
+        key = f"{key}+{mod}"
+    return key
+    #we not use mouse drag. too complex. deal it as ordinary motion.
+    #if buttons & pyglet.window.mouse.LEFT:
+    #pass
+    #pyglet.window.mouse.buttons_string(1)
+    #'LEFT'
+    # pyglet.window.mouse.LEFT
+
+
+class InputLayer:
+    """ packs input events and deliver to Controller.
+
+    1.window itself
+    2.2d multilayer
+    3. 3d, controller
+
+    has window, layer, controller.
+
+    1.pyglet window sends event to here. we translate(pack) key to general form.
+    2. broadcast to window 1st, layer 2nd, controller 3rd.
+    3. all have own keymap.
+    4. controller, specially toward actor kinds 3dworld. fine.
+    """
     def __init__(self):
-        world=cam
-        world.keymap = keymap
-        self.layer = {0: world}
-        #layer 0 1 2 3...
-        #acutally level 0 is deeper ground, while lv8 is higher gui layer..
-        # window MENU HUD 3D kinds..        
-        # we create world.. which always level 0.
-
-        #cam.keymap = keymap_camera#we attach like this. wonderful.
-        #self.layer[9]=cam
-        #=world ..yeah.world.
-
-        self._x = 0
-        self._y = 0
-        self._dx = 0
-        self._dy = 0
-
-    def layer_add(self, layer):
-        maxman = max(self.layer.keys())        
-        self.layer[maxman+1] = layer
-        #a[99] = a.pop(5) is maybe the way of ,,key change.
-
-    #-----------------toomessy
-    def layer_changeto(self, layeridx, to):
-        if to in self.layer:
-            print('layeridx already is!')
-            return 0
-        self.layer[to] = self.layer.pop(layeridx)
-    def see(self):
-        for key in self.layer:
-            print(f"{key} : {self.layer[key]}")
-    #-----------------toomessy
-
-    def layer_hit(self, key):
-        layerkeys = list( self.layer.keys() )
-        layerkeys.sort( reverse = True) #lower first. >>higher first.
-        for layerkey in layerkeys:
-            layer = self.layer[layerkey]
-            if key in layer.keymap.keys():#this means, 'hit'
-                print('hit,',layerkey)
-                return layer
-        #---if no hit..
-        return None
-
-    def layer_run_key(self, layer, key, ispress ):#really good. see how it become simple..
-        funcname = layer.keymap.get(key)
-        try:
-            func = getattr(layer, funcname)
-        except:
-            return#returns None
-        func(ispress)#occurs err while run func.
-
-    def layer_run_mouse(self, layer, key, x,y,dx,dy ):#really good. see how it become simple..
-        funcname = layer.keymap.get(key)
-        try:
-            func = getattr(layer, funcname)
-        except:
-            return#returns None
-        func(x,y,dx,dy)#occurs err while run func.
+        self.window = Window()
+        self.layer = Layer()
+        self.controller = Controller()
 
 
-    def deliver_key(self, key, ispress):
-        #--keep always filled atleast one layer.
-        # if len(self.layer)==0:
-        #     print('layer empty',key)
-        #     return 0
+
+        self.window.keymap = {
+            #--------key input ispress
+            'ESC': 'menu_open',
+            'F11': 'mode_fullscreen',
+
+            'W+LCTRL': 'move_forward_fast',
+            
+            #----------mouse ..note LEFT also of arrow.
+            'M_LEFT': 'change_camera',
+            'M_RIGHT': 'screenshot',
+            'M_SCROLL_UP':'zoom_in',
+            'M_SCROLL_DOWN':'zoom_out',
+
+            #----------motion input x,y,dx,dy
+            #'M_MOTION':'mouse_move', controller delivered last reported xy, dxdy.
+        }
+
+        self.layer.keymap = {
+            'M_LEFT': 'click',            
+        }
+
+        self.mousemap = {'1': 'M_LEFT', '2':'M_MIDDLE', '4':'M_RIGHT'}
+
+        #self.ismousefree = True#..actually custom window has this attr. window also has this..
+        #window internal attr.
+
+
+
+    
+
+
+    #---------------------from input events
+    def pack_key_press(self, ispress, symbol,modifiers ):
+        #key.symbol_string(49)
+        key = pyglet.window.key.symbol_string(symbol)# '1' if mouse button 1.
+
+        #int 1 2 4 LEFT MIDDLE RIGHT. for flag bit..
+        #pyglet.window.mouse.buttons_string(1)
+        #pyglet.window.mouse.LEFT
+        #if key in ('1','2','4'):
+        #    key = pyglet.window.mouse.buttons_string( int(key) )
+        #we have arrow's LEFT. we need mousemap.        
+        if key in mousemap.keys():
+            key = mousemap[key]#fine.
         
-        #----when list
-        #for layer in self.layer:
-        #    if key in layer.keymap.keys():
-        #        break
+        #if key in ('_0','_1','_2','_3','_4','_5','_6','_7','_8','_9'): #maybe slow?? ,,whatever!
+        #    key = key[1]
 
-        #----when dict
-        #see: dict.popitem() leftpop. while pop(key) ..pops.fine.
+        #simple mod. ctrl advantaged.
+        #key.modifiers_string(65505)
+        #'MOD_SHIFT|MOD_SCROLLLOCK|MOD_COMMAND|MOD_OPTION|MOD_FUNCTION'
+        mod = ''
+        if modifiers & pyglet.window.key.LCTRL:
+            mod = 'LCTRL'
+        elif modifiers & pyglet.window.key.LSHIFT:
+            mod = 'LSHIFT'
+        if mod:
+            key = f"{key}+{mod}"
+        self.deliver_key( key, ispress)
 
-        #-----phase1, get all layer, if hit, break. we got hit layer.
-        layer = self.layer_hit(key)
+    #-----------------mouse
+    def pack_mouse_press(self, ispress, x,y,button,modifiers):
+        self.mouse
+        #this maybe useful when click, touch event. not occured motion..
+        self._x = x
+        self._y = y
+        #symbol = mousemap[str(button)]# why int!huh. Nth..fine.
+        self.pack_key( ispress, button, modifiers) # wow. thats why _1 and 1.
+        #we need deiver x,y coordinates.. or set internal _x, _y. not bad..        
+    
+    def pack_mouse_scroll(self, x, y, scroll_x, scroll_y):
+        if scroll_y>0:
+            key = "M_SCROLL_UP"
+        else:
+            key = "M_SCROLL_DOWN"
+        ispress = True
+        self.pack_key( ispress, key, modifiers)
 
-        #-----assume layer was looping for..
-        #-----phase2, get keymap, get func, run func.
+    def pack_mouse_motion(self, x,y,dx,dy):
+        if self.mouse.lock:
+            self.mouse.dx += dx #when mouse lock.
+        else:
+            self.mouse.x = x #when mouse free.
 
-        # if funcname in dir(layer):
-        #     #layer.exec(funcname) we cannot do this..
-        #     func = getattr(layer,funcname)#but this way! i love py!
-        #     #key not delivered. key done it's duty , mapping.
-        #     func(ispress) #send key, and ispress..better than just state.
-        #     #this is method of a object, so it works great.
-        #     print('done',funcname)
-        if layer:
-            self.layer_run_key(layer, key, ispress)
+        #InputLayer holds a mouse, the only one can bound.
+        if self.ismouselock:
+            self.dx += dx #when mouse lock.
+        else:
+            self.x = x #when mouse free.
+
+    def pack_mouse_drag(self, x,y,dx,dy, buttons, modifiers ):
+        #Controller has state, we just use x,y.
+
+        if self.ismouselock:
+            self.dx += dx #when mouse lock.
+        else:
+            if not self.isdrag:
+                self.isdrag = True
+                self.isdrag = True
+                self.dragx = x
+                self.dragy = y
+            else:
+                self.x = x #when mouse free.
+
+    def 
+    #-----------------add more devices touch joystick gyro..
+    def pack_touchpad_press(self, x,y, buttons, modifiers, level, deviceID):
+        if not deviceID in self.touchpadDict:
+            self.touchpadDict[deviceID] = TouchPad(deviceID)
+        touchpad = self.touchpadDict[deviceID]
+
+        touchpad.x = x
+        touchpad.y = y
+        touchpad.value = level
+
+    def pack_touchpad_drag(self, x,y, dx,dy, buttons, modifiers, level, deviceID):
+        if not deviceID in self.touchpadDict:
+            self.touchpadDict[deviceID] = TouchPad(deviceID)
+        touchpad = self.touchpadDict[deviceID]
+
+        touchpad = TouchPad(deviceID)
+        touchpad.x = x
+        touchpad.y = y
+    #why don't we just x - x_before to dx?
+    #assume we press through frames.. we need state and .yeah.    
+
+
+
+
+    class Event:
+        def __init__(self, ispress=False, key="DEFAULT", level=None, x=None,y=None,dx=None,dy=None):
+            self.ispress = ispress
+            self.key = key
+
+            self.x = x
+            self.y = y
+            self.dx = dx
+            self.dy = dy
+
+            self.level = level
+            
+            self.x_gyro
+            self.y_gyro
+            self.z_gyro
+            
+            #joystick 2d xy
+            
+
+    #we need layer first..
+    def pack_mouse_motion(self, x,y,dx,dy):
+        ispress = False
+        keypack = "M_MOTION"
+        self.deliver(ispress, keypack, dx,dy)# by motion, but we can send 0,0 of x,y.fine. since it's too frequent.
+        self.deliver(ispress, keypack, x,y,dx,dy)
+        self.deliver(ispress, keypack)
+        self.deliver(ispress, keypack)
+        self.deliver(ispress, keypack, level)
+        
+        key = "A_UP"
+        level = 0.434
+        self.deliver(level, keypack)
+        #acceptable
+
+        key = "T_TOUCH"
+        level = 0.434 #~1023 or 511 .anyway we need [0-1]
+        #self.deliver(level, keypack, x,y)
+        self.deliver(ispress, keypack, x,y, level=level) # we can use kwargs!
+        #acceptable
+
+        key = "J_ROTATION"
+        level = False
+        self.deliver(level, keypack, x,y,z)
+        #...
+        self.deliver(ispress, key, rot_x=x,rot_y=y,rot_z=z) # we can use kwargs!
 
     def deliver_mouse(self, x,y,dx,dy):
-        """simulate rough dx,dy mouse motion. + x,y. """
-        #x,y 0 if mouse stuck.
-        #see if 3d cursor firework. fine.
         key = 'M_MOTION'
-        layer = self.layer_hit(key)
+        layer_run_mouse(layer, key, x,y, dx,dy)
+
+    def deliver(self, ispress, keypack, x=None,y=None,dx=None,dy=None):
+        #window first
         
-        #we dont know wherer cursor stuck. just give them all!
-        if layer:
-            self.layer_run_mouse(layer, key, x,y, dx,dy)#hope, if stuck, use dxdy, free cursor, use x,y.
+        #layer second
+        
+        #last controller
+        self.controller.deliver(ispress, keypack, x,y,dx,dy)
+
 
 
     def xxxevent_motion(self, key, ispress):
@@ -1133,85 +1289,7 @@ class InputLayer:#fianlly!--was changed . input handler - and controller.
             func(ispress) #send key, and ispress..better than just state.
             print('done',funcname)
 
-
-    #---------------------from input events
-    def pack_key(self, ispress, symbol,modifiers ):
-        """ispress T/F, symbol mod directly.
-
-        :param: ispress, symbol,modifiers
-        :returns: packed key event
-        """
-        #key.symbol_string(49)
-        key = pyglet.window.key.symbol_string(symbol)# '1' if mouse button 1.
-
-        #int 1 2 4 LEFT MIDDLE RIGHT. for flag bit..
-        #pyglet.window.mouse.buttons_string(1)
-        #pyglet.window.mouse.LEFT
-        #if key in ('1','2','4'):
-        #    key = pyglet.window.mouse.buttons_string( int(key) )
-        #we have arrow's LEFT. we need mousemap.        
-        if key in mousemap.keys():
-            key = mousemap[key]#fine.
-        
-        #if key in ('_0','_1','_2','_3','_4','_5','_6','_7','_8','_9'): #maybe slow?? ,,whatever!
-        #    key = key[1]
-
-        #simple mod. ctrl advantaged.
-        #key.modifiers_string(65505)
-        #'MOD_SHIFT|MOD_SCROLLLOCK|MOD_COMMAND|MOD_OPTION|MOD_FUNCTION'
-        mod = ''
-        if modifiers & pyglet.window.key.LCTRL:
-            mod = 'LCTRL'
-        elif modifiers & pyglet.window.key.LSHIFT:
-            mod = 'LSHIFT'
-        if mod:
-            key = f"{key}+{mod}"
-        self.deliver_key( key, ispress)
-
-    def pack_mouse_key(self, ispress, x,y,button,modifiers):
-        #this maybe useful when click, touch event. not occured motion..
-        self._x = x
-        self._y = y
-        #symbol = mousemap[str(button)]# why int!huh. Nth..fine.
-        self.pack_key( ispress, button, modifiers) # wow. thats why _1 and 1.
-        #we need deiver x,y coordinates.. or set internal _x, _y. not bad..        
-    
-    def pack_mouse_scroll(self, x, y, scroll_x, scroll_y):
-        if scroll_y>0:
-            key = "M_SCROLL_UP"
-        else:
-            key = "M_SCROLL_DOWN"
-        ispress = True
-        self.pack_key( ispress, key, modifiers)
-        
-    
-    #-------------------------mouse motion
-    def pack_mouse_motion(self, x,y,dx,dy):
-        self._x = x
-        self._y = y
-        self._dx += dx
-        self._dy += dy
-
-    def update(self):
-        """since mouse motion too frequent_even 300s /seconds. do it in inf. fast update loop."""
-        x = self._x
-        y = self._y
-
-        dx = self._x - self._x_before
-        dy = self._y - self._y_before
-        self._x_before = self._x
-        self._y_before = self._y
-
-        #-hope we not use it... OH, when mouse stuck, this is the only way move.
-        dx2 = self._dx
-        dy2 = self._dy
-        self._dx = 0
-        self._dy = 0
-
-        self.deliver_mouse(x,y,dx2,dy2)
-
-
-inputlayer = InputLayer()
+inputPacker = InputLayer()
 
 #controller
 
@@ -1255,11 +1333,26 @@ class Controller:
         self.deque.append()
     def flush(self):
         self.deque.clear()
-    def no(self):
+    def 
         funcname = keymap.get(key)
         func = getattr(actor,funcname)
         func()
 
+    def update(self):
+            """since mouse motion too frequent_even 300s /seconds. do it in inf. fast update loop."""
+            x = self._x
+            y = self._y
+
+            dx = self._x - self._x_before
+            dy = self._y - self._y_before
+            self._x_before = self._x
+            self._y_before = self._y
+
+            #-hope we not use it... OH, when mouse stuck, this is the only way move.
+            dx2 = self._dx
+            dy2 = self._dy
+            self._dx = 0
+            self._dy = 0
 
 class ActorController:
     def __init__(self):
@@ -1317,45 +1410,20 @@ hoho(None,None)
 class AIController:
     1
 
-#tell ai to press w!
-#=====================================MOUSE EVENT
-#pyglet.window.mouse.buttons_string(1)
-#'LEFT'
-# pyglet.window.mouse.LEFT
-# pyglet.window.mouse.MIDDLE
-# pyglet.window.mouse.RIGHT
 
-@window.event
-def on_mouse_motion(x, y, dx, dy):
-    print(x,y,'motion')
-    inputlayer.pack_mouse_motion(x,y,dx,dy)
 
-@window.event
-def on_mouse_scroll(x, y, scroll_x, scroll_y):
-    inputlayer.pack_mouse_scroll( x, y, scroll_x, scroll_y)
-    #yup to up, 1.0, sx most devices 0.
 
-@window.event
-def on_mouse_drag(x, y, dx, dy, buttons, modifiers):
-    print(x,y,'drag',dx,dy)
-    #inputlayer.pack_mouse_drag( x, y, dx, dy, buttons, modifiers )
-    #if buttons & pyglet.window.mouse.LEFT:
-        #pass
-# def on_mouse_enter(x, y):
-#     pass
-# def on_mouse_leave(x, y):
-#     pass
 
-@window.event
-def on_mouse_press(x, y, button, modifiers):
-    inputlayer.pack_mouse_key(True, x,y,button,modifiers)
-@window.event
-def on_mouse_release(x, y, button, modifiers):
-    inputlayer.pack_mouse_key(False, x,y,button,modifiers)
 #=====================================KEY EVENT
 @window.event
 def on_key_press(symbol,modifiers):#note defualt ESC check.
-    inputlayer.pack_key(True,symbol,modifiers)
+    key = symbol_to_key(symbol,modifiers)
+    inputlayer.cast_button(True,key)
+
+    #we can do also like:
+    #func = cam.keymap.get(key)
+    
+    #if key == 'W': cam.pos+=vec3(1,0,0)
     # if symbol == key.W:
     #     cam.pos += vec3(0,1,0)
     # if symbol == key.S:
@@ -1366,7 +1434,282 @@ def on_key_press(symbol,modifiers):#note defualt ESC check.
     #     cam.pos += vec3(1,0,0)
 @window.event      
 def on_key_release(symbol, modifiers):
-    inputlayer.pack_key(False,symbol,modifiers)
+    key = symbol_to_key(symbol,modifiers)
+    inputlayer.cast_button(False,key)
+    #inputlayer.pack_key_press(False,symbol,modifiers)
+
+
+
+#tell ai to press w!
+#=====================================MOUSE EVENT
+#pyglet.window.mouse.buttons_string(1)
+#'LEFT'
+# pyglet.window.mouse.LEFT
+# pyglet.window.mouse.MIDDLE
+# pyglet.window.mouse.RIGHT
+
+@window.event
+def on_mouse_press(x, y, button, modifiers):
+    #inputlayer.pack_mouse_press(True, x,y,button,modifiers)
+    key = symbol_to_key(button,modifiers)
+    inputlayer.cast_button(True,key, x,y)
+@window.event
+def on_mouse_release(x, y, button, modifiers):
+    key = symbol_to_key(button,modifiers)
+    inputlayer.cast_button(False,key, x,y)
+    
+@window.event
+def on_mouse_scroll(x, y, scroll_x, scroll_y):
+    if scroll_y>0:#up
+        key = "M_SCROLL_UP"
+    elif scroll_y<0:
+        key = "M_SCROLL_DOWN"
+    # through this, we can use one function: cast_button.
+    inputlayer.cast_button(True,key, x,y)
+
+   # inputlayer.pack_mouse_scroll( x, y, scroll_x, scroll_y)
+    #yup to up, 1.0, sx most devices 0.
+
+
+@window.event
+def on_mouse_motion(x, y, dx, dy):
+    """motion and broadcasted once a frame"""
+    inputlayer.cast_mouse_motion(x,y,dx,dy)
+
+@window.event
+def on_mouse_drag(x, y, dx, dy, buttons, modifiers):#ah, maybe when clicked, motion not occur but this.
+    #drag is pressed move. assume it move, for simple way!
+    inputlayer.cast_mouse_motion(x,y,dx,dy)
+
+    #inputlayer.pack_mouse_drag( x, y, dx, dy, buttons, modifiers )
+    #if buttons & pyglet.window.mouse.LEFT:
+        #pass
+
+# def on_mouse_enter(x, y):
+#     pass
+# def on_mouse_leave(x, y):
+#     pass
+
+
+#translate keyboard, mouse button symbol.
+#key = symbol_to_key(button,modifiers)
+#key = symbol_to_key(symbol,modifiers)
+
+
+#for (internal) keyboard, mouse button
+#cast_button(ispress,key)
+#cast_button(ispress,key ,x,y) #x,y for mouse.
+#for (internal) mouse movement
+#cast_motion(x,y,dx,dy)
+
+
+#for joystick button
+#cast_button_joystick(ispress, key, level)
+#for joystick movement
+#cast_motion_joystick(x,y,dx,dy)
+
+#for touch button
+#cast_button_touch(ispress, key, x,y)
+#for touch movement
+#cast_motion_touch(x,y,dx,dy)
+
+#for tablet button
+#cast_button_tablet(ispress, key, x,y, level)
+#for tablet movement
+#cast_motion_tablet(x,y,dx,dy)
+
+#for gyro button
+#cast_button_gyro(ispress, key, x,y,z)
+#for gyro motion
+#cast_motion_gyro(x,y,z)
+
+
+#----gen 2
+
+#cast_button_keyboard(ispress,key)
+
+#cast_button_mouse(ispress,key ,x,y)
+#cast_button_tablet(ispress, key, x,y, level)
+#cast_button_joystick(ispress, key, level)
+#cast_button_gyro(ispress, key, x,y,z)..hope we not thisway..
+
+#cast_motion_joystick(x,y,dx,dy)--whatif Astick stuck somepoint, not move, not occurs motion event?
+#cast_motion_mouse(x,y,dx,dy)
+#cast_motion_gyro(x,y,z)
+#cast_motion_tablet(x,y,dx,dy)
+
+#hopefully we use x,y, to controll mouse by gyro.
+
+
+
+#----gen 3
+
+#cast_button(ispress, key)
+
+#cast_button(ispress, key ,x=x,y=y)
+#cast_button(ispress, key, x=x,y=y, level=level)
+#cast_button(ispress, key, level =level)
+#cast_button(ispress, key, x=x,y=y,z=z)..hope we not thisway..
+
+#cast_motion(key, x,y,dx,dy)--whatif Astick stuck somepoint, not move, not occurs motion event?
+#cast_motion(key, x,y,dx,dy)
+#cast_motion(key, x,y,dx,dy)
+#cast_motion(key, x,y)
+#cast_motion(key, x,y,z=z)
+#cast_motion(key, x)
+
+#key = "JOYSTICK_XAXIS"
+#self.motionDict["JOYSTICK_XAXIS"] = x
+
+#self.motionDict["M_MOTION"] = (x,y)
+#self.motionDict["M_MOTION"] = (dx,dy)
+#self.motionDict["M_MOTION_LOCK"] = (dx,dy)
+
+#self.motionDict["GYRO_MOTION"] = (x,y,z)
+#x,y,z = self.motionDict["GYRO_MOTION"] - self.motionDict["GYRO_MOTION_BEFORE"]
+
+#self.motionDict["GYRO_XYZ"] = (x,y,z)
+#x,y,z = self.motionDict["GYRO_XYZ"] - self.motionDict["GYRO_XYZ_BEFORE"]
+
+
+
+
+M_MOTION : move_camera
+GYRO_MOTION : move_camera
+
+J_MOTION : move_camera#left
+J_XROT : move_camera #right
+J_YROT : move_camera
+#...see, we have internal adder, or update,
+#and deliver final state of x,y.
+
+#joystick motion 1
+J_XROT : >> x=x
+J_YROT : >> y=y
+#joystick motion 2
+#if self.motionstate = 1#joystick
+controller.cast_motion(x,y)
+
+#1.mouse motion, x=x, dx+=dx
+#2. we have motion state, m_start m_end -> dx. thats for M_MOTION.
+#if key not MOTION
+
+MOTION
+
+M_MOTION
+J_MOTION
+J_AXISX
+J_AXISY
+GYRO_MOTION
+
+W MOVE_FORWARD [0/1]
+J_Y MOVE_FORWARD [0/1]
+J_AXISY MOVE_FORWARD [0-1] #IF FUNC SUPPORTS ANALOG, SO BE IT. #do deadzone here.
+
+
+
+def MOVE_FORWARD(self, value):
+    if value:#0 False
+        self.state = "move"
+        #self.speed = value * self.sensitivity
+        #self.speed = self.front*value
+        #self.speedy = # xy can be y-up, or x-front. how confusing.. 2D-flatform, x-front. 3d, x-front.
+        self.speedx = value
+    else:
+        self.state = "stop"
+
+def MOVE_RIGHT(self, value):
+    if value:#0 False
+        self.state = "move"
+        #self.speed = value * self.sensitivity
+        #self.speed = self.front*value
+        #self.speedy = # xy can be y-up, or x-front. how confusing.. 2D-flatform, x-front. 3d, x-front.
+        self.speedz = value #y-up?? Im gonna crazy.. anyway internal is xfornt, yup. thats fine. yeah.
+        #..or z front, as screen see..
+    else:
+        self.state = "stop"
+
+
+#all generalization [0-1]
+#those has axis(of 1-3..), dx by _before (exmouse, by dx) and dx>0, call event.
+
+class AxisDevice:
+    def __init__(self, axis=1):
+        self.axis = axis
+        self.x = 0
+        self._x = 0
+        self.dx = 0
+    def __repr__(self):
+        return f"an axis {self.axis} device"
+
+slider = AxisDevice(1)
+
+mouse = AxisDevice(2)
+
+xboxL2 = AxisDevice(1)
+xboxR2 = AxisDevice(1)
+xboxLstick = AxisDevice(2)
+xboxRstick = AxisDevice(2)
+
+phoneGyro = AxisDevice(3)
+
+joyconL = AxisDevice(2)
+joyconR = AxisDevice(2)
+joyconGyroL = AxisDevice(3)
+joyconGyroR = AxisDevice(3)
+
+tablet = AxisDevice(2)
+
+key = "SLIDER", value = slider.x
+key = "SLIDER", value = slider.x, slider.dx
+
+key = "M_X", value = mouse.x
+key = "M_MOTION", value = (mouse.x, mouse.y)
+key = "M_MOTION", value = (mouse.dx, mouse.dy)
+key = "M_MOTION", value = (x,y,dx,dy)
+
+key = "J_Lstick", value = (x,y,dx,dy)
+
+key = "J_L2", value = xboxL2.x
+
+
+#1axis, we only give x, not dx since it acts like button
+
+def screenshot():
+    'check'
+
+func()
+func(keypack)
+
+A : move_cameraXXXXXXXXXXXX
+A : move_camera (A,0)
+A : move_cameraX
+W : move_cameraY
+
+M_XY : move_camera --it looks like only give x,y. not dxdy..
+M_MOTION : move_camera whatif MOTION assumes xy + dxdy???
+
+XBOX_Lstick : move_camera
+
+GYRO : move_camera
+
+key = XBOX_Lstick
+
+def move_camera(self, dx,dy):
+    "wefwoeifjdwefoi"
+
+W : move_forward
+J_L2 : move_forward
+def move_forward(self, value):
+    if value:
+        self.ismoving=True
+        self.speed=value
+    else:
+        self.ismoving=False
+        #self.speed=value
+        self.speed=0
+
+
 
 #=====================================analog KEY EVENT
 #and for..
