@@ -50,14 +50,24 @@ class Window(pyglet.window.Window):
         #print(self.width,self.height)
         #print(window.get_size())
         #self.set_exclusive_mouse(True)
-        self.set_vsync(False)  #for maximum fps      
+        self.set_vsync(False)  #for maximum fps        
         self.keymap = {'T': 'lock_mouse(1)', 'ESCAPE': 'close'}
-        self.is_mouselock = False        
+        self.is_mouselock = False
+
+        self.gl_settings()
         
         def on_key_press(symbol,modifiers):
             #print(pyglet.window.key.symbol_string(symbol))
             pass
         self.on_key_press = on_key_press
+
+    def gl_settings(self):
+        #===============================gl settings
+        glEnable(GL_DEPTH_TEST) #--skip depth less kinds.. default fine.
+        #glClearColor(0.0, 0.24, 0.5, 1.0) #moved from draw loop.. #..why it here??
+        glPointSize(5) #good for debug
+
+
 
     def close(self,value=False):#alt f4 error fixed.            
         super().close()
@@ -76,21 +86,21 @@ class Window(pyglet.window.Window):
         window = self
         @window.event
         def on_key_press(symbol,modifiers):
-            key = symbol_to_key(symbol,modifiers)            
+            key = InputLayer.symbol_to_key(symbol,modifiers)            
             inputlayer.cast(key,1)
         @window.event      
         def on_key_release(symbol, modifiers):
-            key = symbol_to_key(symbol,modifiers)
+            key = InputLayer.symbol_to_key(symbol,modifiers)
             inputlayer.cast(key,0)
         #=====================================MOUSE EVENT
         @window.event
         def on_mouse_press(x, y, button, modifiers):
-            key = symbol_to_key(button,modifiers)
+            key = InputLayer.symbol_to_key(button,modifiers)
             if not window.is_mouselock:inputlayer.cast_axis(x,y)
             inputlayer.cast(key,1)
         @window.event
         def on_mouse_release(x, y, button, modifiers):
-            key = symbol_to_key(button,modifiers)
+            key = InputLayer.symbol_to_key(button,modifiers)
             if not window.is_mouselock:inputlayer.cast_axis(x,y)
             inputlayer.cast(key,0)
         @window.event
@@ -190,11 +200,6 @@ class Window(pyglet.window.Window):
 
 
 window = Window()
-
-#===============================gl settings
-glEnable(GL_DEPTH_TEST) #--skip depth less kinds.. default fine.
-#glClearColor(0.0, 0.24, 0.5, 1.0) #moved from draw loop.. #..why it here??
-glPointSize(5) #good for debug
 
 
 
@@ -793,11 +798,6 @@ cam2 = Camera_Ortho()
 
 
 #this is the grand all file loaded data storage
-gl_dict = {
-    "shader" : {},
-    "texture" : {},
-    "VAO" : {},
-}
 
 #actor.texture
 #actor.mesh1.texture
@@ -874,59 +874,7 @@ class PollingSocket:
 
 
 
-def symbol_to_key(symbol, modifiers):
-    """ translate keyboard,mouse input, to use directly keymap={'W':do_func}.
 
-
-    :param symbol: keyboard,mouse button (not for the state of drag 1+4=5.)
-    :param modifiers: CTRL(1st), LSHIFT only.
-    :returns: key. W W+CTRL M_LEFT...
-    """
-    
-    #======================symbol
-    key = pyglet.window.key.symbol_string(symbol)
-    #'1' if mouse button 1.  key.symbol_string(49) > "_1"
-    #if buttons & pyglet.window.mouse.LEFT:
-    #pass
-    #pyglet.window.mouse.buttons_string(1)
-    #'LEFT'
-    # pyglet.window.mouse.LEFT
-    
-    #-----mouse buttons int 1,2,4    
-    if symbol == 1:
-        key = "M_LEFT"
-    elif symbol == 2:
-        key = "M_MIDDLE"
-    elif symbol == 4:
-        key = "M_RIGHT"
-    
-    #------keyboard number 48 0 57 9  
-    elif 48 <= symbol <=57:            
-        key = key[1]# '_0' to '0'
-        #print(key,'seenumberkeyboard')
-
-    #======================modifiers
-    #simple mod. ctrl advantaged.
-    #key.modifiers_string(65505)
-    #'MOD_SHIFT|MOD_SCROLLLOCK|MOD_COMMAND|MOD_OPTION|MOD_FUNCTION'
-    #NOTE: MOD_SCROLLLOCK -> CTRL
-    #print( pyglet.window.key.modifiers_string(modifiers) )    
-    #MOD_SHIFT|MOD_CTRL|MOD_ALT|MOD_NUMLOCK|MOD_SCROLLLOCK
-    
-    mod = ''
-    #if modifiers & pyglet.window.key.LCTRL:
-    #elif modifiers & pyglet.window.key.LSHIFT:
-    MODSTRING = pyglet.window.key.modifiers_string(modifiers)#takes 50ms for 100k
-    if "MOD_CTRL" in MODSTRING:
-        mod = 'CTRL'
-    elif "MOD_SHIFT" in MODSTRING:
-        mod = 'SHIFT'
-    if mod:
-        #if not key in ("ESCAPE", ):
-        key = f"{key}+{mod}"
-    return key
-    #we not use mouse drag. too complex. deal it as ordinary motion.
-    
 
 
 keymap = {
@@ -964,6 +912,62 @@ keymap = {
 
 
 class InputLayer:
+    @classmethod
+    def symbol_to_key(cls, symbol, modifiers):
+        """ translate keyboard,mouse input, to use directly keymap={'W':do_func}.
+
+
+        :param symbol: keyboard,mouse button (not for the state of drag 1+4=5.)
+        :param modifiers: CTRL(1st), LSHIFT only.
+        :returns: key. W W+CTRL M_LEFT...
+        """
+        
+        #======================symbol
+        key = pyglet.window.key.symbol_string(symbol)
+        #'1' if mouse button 1.  key.symbol_string(49) > "_1"
+        #if buttons & pyglet.window.mouse.LEFT:
+        #pass
+        #pyglet.window.mouse.buttons_string(1)
+        #'LEFT'
+        # pyglet.window.mouse.LEFT
+        
+        #-----mouse buttons int 1,2,4    
+        if symbol == 1:
+            key = "M_LEFT"
+        elif symbol == 2:
+            key = "M_MIDDLE"
+        elif symbol == 4:
+            key = "M_RIGHT"
+        
+        #------keyboard number 48 0 57 9  
+        elif 48 <= symbol <=57:            
+            key = key[1]# '_0' to '0'
+            #print(key,'seenumberkeyboard')
+
+        #======================modifiers
+        #simple mod. ctrl advantaged.
+        #key.modifiers_string(65505)
+        #'MOD_SHIFT|MOD_SCROLLLOCK|MOD_COMMAND|MOD_OPTION|MOD_FUNCTION'
+        #NOTE: MOD_SCROLLLOCK -> CTRL
+        #print( pyglet.window.key.modifiers_string(modifiers) )    
+        #MOD_SHIFT|MOD_CTRL|MOD_ALT|MOD_NUMLOCK|MOD_SCROLLLOCK
+        
+        mod = ''
+        #if modifiers & pyglet.window.key.LCTRL:
+        #elif modifiers & pyglet.window.key.LSHIFT:
+        MODSTRING = pyglet.window.key.modifiers_string(modifiers)#takes 50ms for 100k
+        if "MOD_CTRL" in MODSTRING:
+            mod = 'CTRL'
+        elif "MOD_SHIFT" in MODSTRING:
+            mod = 'SHIFT'
+        if mod:
+            #if not key in ("ESCAPE", ):
+            key = f"{key}+{mod}"
+        return key
+        #we not use mouse drag. too complex. deal it as ordinary motion.
+    
+
+
     """has window check. sends packed events to  Controller (2d,3d) """
     def __init__(self):
         self.events = [] #eventList ..fast but not PEP8.  (list)-s (dict)_dict fine.        
@@ -1247,31 +1251,6 @@ if Joystick.available():
 
 
 
-#------update loop
-#0. keyboard, mouse, kinds event -> inputLayer.
-
-#1. polling input device. set value.  including mouse xy.(if they moved.)
-#2. inputManager, (window first), to controller. 2d layer is also an controlled system.
-#3. update by input
-#4. update by physics simulation
-#5. draw
-
-def update(dt):
-    if not dt==0:
-        1
-        #print(1/dt)
-    
-    eventpack = inputlayer.update()    
-    #eventpack = aicontrollerCV.get()
-    
-    playercontroller.broadcast(eventpack)
-
-    #uiworld.update(dt)
-    #world.update(dt)
-    
-
-#pyglet.clock.schedule(update)
-pyglet.clock.schedule_interval(update, 0.01) 
 
 
 
@@ -1328,66 +1307,14 @@ class Actor:
 
         #self.attr_classdict = {'pos':vec3, }
         self.attr_vec3 = ('pos',)
-        self.attr_keys = [
-        "pos",
-        "keymap",
-
-        "shader_ID",
-        "texture_ID",
-        "VAO_ID",
-        "is_skipdraw",
+        self.attr_keys = [ "pos", "keymap", "shader_ID","texture_ID","VAO_ID","is_skipdraw",
         ]
-
-    def add_child(self,child):
-        self.child_ID_list.append(child.ID)
-    def set_child(self, child_s):
-        """set_childs too bad name. we know it is list, from add_child method. """
-        if isinstance(child_s, list):
-            self.child_ID_list = [ child.ID for child in child_s]
-        else:
-            self.child_ID_list = [child_s.ID]
-
-        # self.__attrdict = {}
-        # self.__attrkeys = [
-        # 'pos',
-        # 'shader_ID',
-        # 'texture_ID',
-        # 'VAO_ID',
-        # 'is_skipdraw',
-        # ]
-    # def __setattr__(self,name,value):
-    #     if name in self.__attrkeys:
-    #         self.__attrdict[name] = value
-    #     else:
-    #         super().__setattr__(name, value)
-
-    # def __getattr__(self,name):
-    #     if name in self.__attrkeys:
-    #         return self.__attrdict[name]
-    #     else:
-    #         super().__getattr__(name)
-
-    #     #setattr(target, name, value)
-
-    # def xx__getattribute__(self,attr):
-    #     getter = super().__getattribute__
-    #     if attr in getter("attrs_to_override"):
-    #         getter("docustomstuff")(attr)
-    #     return getter(attr)
-
 
     def savestr(self):
         # vec3 ->list. False false.  NOTE: None->null, tuple->list.
         outdict = {}
         for key in self.attr_keys:
             outdict[key] = getattr(self,key)
-        # outdict = {
-        # 'pos' : self.pos,
-        # 'shader_ID' : self.shader_ID,
-        # 'texture_ID' : self.texture_ID,
-        # 'VAO_ID' : self.VAO_ID,
-        # 'is_skipdraw' : self.is_skipdraw,
-        # }
         return json.dumps(outdict)
 
     def loadstr(self, string):
@@ -1397,11 +1324,6 @@ class Actor:
                 setattr(self,key, vec3(value) )
             else:
                 setattr(self,key,value)
-        # self.pos = indict['pos']
-        # self.shader_ID = indict['shader_ID']
-        # self.texture_ID = indict['texture_ID']
-        # self.VAO_ID = indict['VAO_ID']
-        # self.is_skipdraw = indict['is_skipdraw']
 
     def copy(self):
         actor = Actor()
@@ -1413,12 +1335,16 @@ class Actor:
                 setattr(actor,key, vec3(value) )
             else:
                 setattr(actor,key,value)
-        #actor.pos = vec3(self.pos)#fine.
-        #actor.shader_ID = self.shader_ID
-        #actor.texture_ID = self.texture_ID
-        #actor.VAO_ID = self.VAO_ID
-        #actor.is_skipdraw = self.is_skipdraw
         return actor
+
+    def add_child(self,child):
+        self.child_ID_list.append(child.ID)
+    def set_child(self, child_s):
+        """set_childs too bad name. we know it is list, from add_child method. """
+        if isinstance(child_s, list):
+            self.child_ID_list = [ child.ID for child in child_s]
+        else:
+            self.child_ID_list = [child_s.ID]
 
     def get_Model(self):
         x,y,z = self.pos
@@ -1427,6 +1353,8 @@ class Actor:
     #def destroy(self):        wecannot refer world. let world delete it.
 
     #Actor_saveload (small means method.) see Actor_method_saveload is too long.
+    #SaveActor
+    #Unit(Actor, Actor_save, ) #Actor_save only for methods.
     #-00these kinds .. we expend  Actor_Movable kinds. not pawn.
     def move_forward(self, value):
         if not value:return
@@ -1435,8 +1363,6 @@ class Actor:
         if not value:return
         self.pos += vec3(value,0,0)
 
-#SaveActor
-#Unit(Actor, Actor_save, ) #Actor_save only for methods.
 
 actor = Actor()
 actor.shader_ID = shader.ID
@@ -1488,14 +1414,16 @@ class World:
         if cam:
             return cam
 
-    def remove_actor(self,actor):#pop..nah..       #should we input ID directly? 
+    def remove_actor(self,actor_ID):#pop..nah..       #should we input ID directly? 
         #actor = self.actor_dict[actor.ID]
-        actor = self.actor_dict.pop(actor.ID)#..pop!
+        actor = self.actor_dict.pop(actor_ID)#..pop!
         #its done here. it not drawed.. neither updated.. we only access bia world.
         #check controller target to None..
 
+    
     def update(self, dt):
         print(dt)
+    
     def set_camer(self, ID):#deprecated. fine.
         camera = self.cameraDict.get(ID)
         if camera !=None:
@@ -1527,6 +1455,7 @@ class World:
 
         sorted_key = sorted(self.actor_dict, key=lambda k: (book[0][k],book[1][k],book[2][k]) )
         self.gl_sortedID =sorted_key
+        self.gl_sort_required = False
         #return sorted_key
 
     def draw(self):
@@ -1626,6 +1555,35 @@ class UIworld(World):
 
 
 
+
+
+#------update loop
+#0. keyboard, mouse, kinds event -> inputLayer.
+
+#1. polling input device. set value.  including mouse xy.(if they moved.)
+#2. inputManager, (window first), to controller. 2d layer is also an controlled system.
+#3. update by input
+#4. update by physics simulation
+#5. draw
+
+def update(dt):
+    if not dt==0:
+        1
+        #print(1/dt)
+    
+    eventpack = inputlayer.update()    
+    #eventpack = aicontrollerCV.get()
+    
+    playercontroller.broadcast(eventpack)
+
+    #uiworld.update(dt)
+    world.update(dt)
+    
+
+#pyglet.clock.schedule(update)
+pyglet.clock.schedule_interval(update, 0.0051) 
+
+
 @window.event
 def on_draw():
     gldraw()
@@ -1635,7 +1593,6 @@ def gldraw():
     #glClear(GL_COLOR_BUFFER_BIT)
     glClearColor(0.0, 0.24, 0.5, 1.0)
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
-
     world.draw()
 
     return
