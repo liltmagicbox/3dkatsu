@@ -1,5 +1,5 @@
 import uuid
-
+import random
 from time import time, sleep
 import numpy as np
 
@@ -12,7 +12,6 @@ from OpenGL.GL import shaders
 
 from collections import deque
 
-
 def clamp(target, low,high):
     if low<=target<=high:
         return target
@@ -23,13 +22,18 @@ def clamp(n, smallest, largest):return max(smallest, min(n, largest))
 
 
 #-rules
-#texture.TEXTURE. long but fine. since VAO VBO..
+#texture.TEXTURE. long but fine. since VAO VBO.. --- ID, ID_VBO. ID better.
 #update usually changes data. note VAO.update_indices means +indices.
 
 #ID UI all capital
 #is_() get_() set_() ,,,not direct self.isValue = True
 # oop_ axis_
 #def set_position_xy(self, value, mousex,mousey)
+
+#is_bool attr.
+
+
+
 
 
 #=============================== WINDOW
@@ -48,27 +52,74 @@ class Window(pyglet.window.Window):
         #self.set_exclusive_mouse(True)
         self.set_vsync(False)  #for maximum fps      
         self.keymap = {'T': 'lock_mouse(1)', 'ESCAPE': 'close'}
-        self.ismouselock = False
+        self.is_mouselock = False        
         
         def on_key_press(symbol,modifiers):
-            #print(symbol)
             #print(pyglet.window.key.symbol_string(symbol))
             pass
         self.on_key_press = on_key_press
 
-    def close(self,value=False):#alt f4 error fixed.
+    def close(self,value=False):#alt f4 error fixed.            
         super().close()
         return True
 
     def lock_mouse(self,value=False):
         if not value:return True#works great. True for escape        
-        self.ismouselock = not self.ismouselock
-        self.set_exclusive_mouse(self.ismouselock)#lock mouse x,y 0, hold. use dxdy then!         
+        self.is_mouselock = not self.is_mouselock
+        self.set_exclusive_mouse(self.is_mouselock)#lock mouse x,y 0, hold. use dxdy then!         
         return True #escape
 
+    def bind_inputlayer(self,inputlayer):
+        #=====================================KEY EVENT
+        #self.inputlayer = inputlayer
+        #inputlayer = self.inputlayer
+        window = self
+        @window.event
+        def on_key_press(symbol,modifiers):
+            key = symbol_to_key(symbol,modifiers)            
+            inputlayer.cast(key,1)
+        @window.event      
+        def on_key_release(symbol, modifiers):
+            key = symbol_to_key(symbol,modifiers)
+            inputlayer.cast(key,0)
+        #=====================================MOUSE EVENT
+        @window.event
+        def on_mouse_press(x, y, button, modifiers):
+            key = symbol_to_key(button,modifiers)
+            if not window.is_mouselock:inputlayer.cast_axis(x,y)
+            inputlayer.cast(key,1)
+        @window.event
+        def on_mouse_release(x, y, button, modifiers):
+            key = symbol_to_key(button,modifiers)
+            if not window.is_mouselock:inputlayer.cast_axis(x,y)
+            inputlayer.cast(key,0)
+        @window.event
+        def on_mouse_scroll(x, y, scroll_x, scroll_y):
+            if scroll_y>0:#up
+                key = "M_SCROLL_UP"
+            elif scroll_y<0:
+                key = "M_SCROLL_DOWN"
+            if not window.is_mouselock:inputlayer.cast_axis(x,y)
+            inputlayer.cast(key,1)
+
+        @window.event
+        def on_mouse_motion(x, y, dx, dy):
+            """motion and broadcasted once a frame"""
+            if not window.is_mouselock:
+                inputlayer.cast_axis(x,y, key = "M_XY_MOTION")
+            else:
+                inputlayer.cast_axis(dx,dy, key = "M_DXDY_MOTION")
+        @window.event
+        def on_mouse_drag(x, y, dx, dy, buttons, modifiers):#ah, maybe when clicked, motion not occur but this.
+            #drag is pressed move. assume it move, for simple way!
+            if not window.is_mouselock:
+                inputlayer.cast_axis(x,y, key = "M_XY_MOTION")
+            else:
+                inputlayer.cast_axis(dx,dy, key = "M_DXDY_MOTION")
+        
+    
 
 
-window = Window()
 
 [
  '_windowed_size',
@@ -134,6 +185,12 @@ window = Window()
  'visible',
  'vsync',
  'width']
+
+
+
+
+window = Window()
+
 #===============================gl settings
 glEnable(GL_DEPTH_TEST) #--skip depth less kinds.. default fine.
 #glClearColor(0.0, 0.24, 0.5, 1.0) #moved from draw loop.. #..why it here??
@@ -193,7 +250,7 @@ class Shader:
         program = shaders.compileProgram( vshader,fshader)
         glDeleteShader(vshader)
         glDeleteShader(fshader)
-        self.SHADER= program
+        self.ID= program
 
         #----Locations. no need to bind the program.
         self.ProjectionLoc = glGetUniformLocation(program, "Projection")
@@ -204,7 +261,7 @@ class Shader:
         assert -1 not in (self.ProjectionLoc,self.ViewLoc,self.ModelLoc)
 
     def bind(self):
-        glUseProgram(self.SHADER)
+        glUseProgram(self.ID)
     def unbind(self):
         glUseProgram(0)
 
@@ -222,13 +279,15 @@ class Shader:
 
 
 
-#=============================== SHADER
-
 shader = Shader(vertn,fragn)
 #print(s.ViewLoc)
 #s.bind()
 #s.set_Model(modelmat)
 #s.unbind()
+#=============================== SHADER
+
+
+
 
 
 #=============================== MESH DATA
@@ -237,7 +296,7 @@ shader = Shader(vertn,fragn)
 # VAO = VAO,VBO created, attr connects data.
 
 
-class VAO:
+class VAO_NotIndexed:
     def __init__(self, attr_size_dict,  vertices):
         #{0:3,1:2}
         stride = sum(attr_size_dict.values())
@@ -271,8 +330,8 @@ class VAO:
                 glEnableVertexAttribArray(attr_index)
                 pre_offset +=size
             
-        self.VAO = VAO
-        self.VBO = VBO
+        self.ID = VAO
+        self.ID_VBO = VBO
         #self.mode = GL_TRIANGLES some model drawn lines kind thing requires not use it.
         self.stride = stride
         self.points = len(vertices)//stride
@@ -280,33 +339,34 @@ class VAO:
     def update(self,vertices):
         """requires same shape, same attr .. ..not that much.?"""
         #assert self.points == len(vertices)//self.stride
-        VAO = self.VAO
-        VBO = self.VBO
+        VAO = self.ID
+        VBO = self.ID_VBO
         glBindVertexArray(VAO)
         glBindBuffer(GL_ARRAY_BUFFER, VBO) #gpu bind VBO in VAO
         glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_STATIC_DRAW)
         #GL_STREAM_DRAW for little change, if you want someday..
     
     def bind(self):
-        glBindVertexArray(self.VAO)
+        glBindVertexArray(self.ID)
     def unbind(self):
         glBindVertexArray(0)
 
     def draw(self, MODE = GL_TRIANGLES):
         """requires bind first. it just draw command of VAO bound gpu."""
         #simple mode changeable draw. we not prefer partial draw which is slow.
-        #glBindVertexArray(self.VAO)
+        #glBindVertexArray(self.ID)
         glDrawArrays(MODE, 0, self.points) #mode first count
 
 
-vao = VAO( {0:3,1:2},
+vao = VAO_NotIndexed( {0:3,1:2},
     np.array([0,0,0, 0,0,  1,0,0, 1,0,  1,1,0, 1,1,  0,1,0, 0,1, ]).astype('float32')
     )
 vao.update( np.array([0,0,0, 0,0,  1,0,0, 1,0,  1,1,0, 1,1, ]).astype('float32') )
 #vao.draw()
 
 
-class VAO_Indexed:
+class VAO:
+    """indexed actually. hope we not use vao_notindexed."""
     def __init__(self, attr_size_dict,  vertices, indices):
         stride = sum(attr_size_dict.values())
 
@@ -339,17 +399,17 @@ class VAO_Indexed:
                 glEnableVertexAttribArray(attr_index)
                 pre_offset +=size
             
-        self.VAO = VAO
-        self.VBO = VBO
-        self.EBO = EBO
+        self.ID = VAO
+        self.ID_VBO = VBO
+        self.ID_EBO = EBO
         #self.mode = GL_TRIANGLES some model drawn lines kind thing requires not use it.
         self.stride = stride
         self.points = len(indices)
     def update(self,vertices):
         """requires same shape kinds.."""
         #assert self.points == len(vertices)//self.stride
-        VAO = self.VAO
-        VBO = self.VBO
+        VAO = self.ID
+        VBO = self.ID_VBO
         glBindVertexArray(VAO)
         glBindBuffer(GL_ARRAY_BUFFER, VBO) #gpu bind VBO in VAO
         glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_STATIC_DRAW)
@@ -358,9 +418,9 @@ class VAO_Indexed:
 
     def update_indices(self,vertices, indices):
         """hope we not use this.."""
-        VAO = self.VAO
-        VBO = self.VBO
-        EBO = self.EBO
+        VAO = self.ID
+        VBO = self.ID_VBO
+        EBO = self.ID_EBO
         glBindVertexArray(VAO)
         glBindBuffer(GL_ARRAY_BUFFER, VBO) #gpu bind VBO in VAO
         glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_STATIC_DRAW)
@@ -369,18 +429,18 @@ class VAO_Indexed:
         self.points = len(indices)#now we can really change it..
 
     def bind(self):
-        glBindVertexArray(self.VAO)
+        glBindVertexArray(self.ID)
     def unbind(self):
         glBindVertexArray(0)
 
     def draw(self, MODE = GL_TRIANGLES):
         """requires bind first. it just draw command of VAO bound gpu."""
         #simple mode changeable draw. we not prefer partial draw which is slow.
-        glBindVertexArray(self.VAO)
+        #glBindVertexArray(self.VAO)
         glDrawElements(MODE, self.points, GL_UNSIGNED_INT, None)
 
 
-vaoidx = VAO_Indexed( {0:3,1:2},
+vaoidx = VAO( {0:3,1:2},
     #np.array([0,0,0, 0,0,  0.5,0,0, 1,0,  0.5,0.5,0, 1,1,  0,0.5,0, 0,1, ]).astype('float32'),
     #np.array([0,0,0, 0,0,  1,0,0, 1,0,  1,1,0, 1,1,  0,1,0, 0,1, ]).astype('float32'),
     np.array([ [0,0,0, 0,0],  [1,0,0, 1,0],  [1,1,0, 1,1],  [0,1,0, 0,1] ]).astype('float32'),
@@ -399,6 +459,7 @@ vaoidx.update_indices(
 
 
 #=============================== MESH DATA
+
 
 
 
@@ -455,7 +516,7 @@ class Texture:
         
         self.MIPMAP = MIPMAP
         self.FORMAT = FORMAT
-        self.TEXTURE = texture
+        self.ID = texture
         self.width = width
         self.height = height
 
@@ -466,7 +527,7 @@ class Texture:
         tmpdata = np.empty_like(data)
         np.copyto(tmpdata,data[::-1,:])#fliped.fine.
 
-        glBindTexture(GL_TEXTURE_2D, self.TEXTURE)
+        glBindTexture(GL_TEXTURE_2D, self.ID)
         #level mipmap.
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, self.width, self.height, self.FORMAT, GL_UNSIGNED_BYTE, tmpdata )
         if self.MIPMAP:
@@ -476,7 +537,7 @@ class Texture:
         glBindTexture(GL_TEXTURE_2D, 0)
 
     def bind(self):
-        glBindTexture(GL_TEXTURE_2D, self.TEXTURE)
+        glBindTexture(GL_TEXTURE_2D, self.ID)
     def unbind(self):
         glBindTexture(GL_TEXTURE_2D, 0)
 
@@ -504,6 +565,8 @@ class Texture:
 
 
 texture =  Texture.byimg('texture2.jpg')
+
+
 #print(texture)
 
 npimg = texture.get_np()
@@ -565,14 +628,16 @@ class FBO:
 
 
 
-
-
 import math
-from pymatrix_mini import vec3,eye4, normalize,  mperspective,mortho,mlookat
+from pymatrix_mini import vec3,eye4,translate, normalize, mperspective,mortho,mlookat
 
 
 class Camera:
+    ID = 0
     def __init__(self):
+        self.ID = Camera.ID
+        Camera.ID+=1
+
         self.pos = vec3(0,0,1)#little back from screen
 
         self.front = vec3(0,0,-1)#toward screen
@@ -592,6 +657,15 @@ class Camera:
 
         self.sensitivity = 0.1
 
+        self.target = None
+        self.actor = None
+
+        self.keymap = {
+        'M_DXDY': 'mouse_moveDXDY(1)',
+        'M_SCROLL_UP': 'set_fov(-5)',
+        'M_SCROLL_DOWN': 'set_fov(5)',
+        }
+
     def get_Projection(self):#was set_..
         fov = self.fov
         window_ratio = self.window_ratio
@@ -601,8 +675,13 @@ class Camera:
         return mprojection
 
     def get_View(self):
+        if self.actor:#think here is fine.
+            self.pos = self.actor.pos
         eye = self.pos
-        target = self.pos+self.front
+        if self.target:
+            target = self.target.pos
+        else:
+            target = self.pos+self.front
         upV = self.up
         mview = mlookat(eye,target,upV)
         return mview
@@ -611,6 +690,7 @@ class Camera:
     def set_fov(self,value):
         if not value:return
         self.fov = clamp( self.fov+value, self.fov_min,self.fov_max)
+
     def move_forward(self, value):
         if not value:return
         self.pos += vec3(0,value,0)
@@ -678,20 +758,121 @@ class Camera_Ortho:
         return mview
 
 
+
+
+
 cam = Camera()
 cam2 = Camera_Ortho()
 
-#symbol to modifier,
-#500ms for 1M, 100k, 50ms, 100, 0.05ms took. 0.005ms for each frames, maybe.
-#30ms 1M raw loop, str in , 50ms.
-# t=time()
-# for i in range(1000_000):
-#     modifiers = 272
-#     #MODSTRING = pyglet.window.key.modifiers_string(modifiers)
-#     #5 in (1,2,3,4,5,6,7,8) this also faster than a=(1,2,3,4,5,6,7,8)
-#     #'aero' in 'aerighjeroihjeorthjareor'#this faster than a='aergareg'.wow..
-# print(time()-t)
-# exit()
+
+
+
+#class AXISActor: #not here
+
+
+#obj1 = load_obj(fname)
+
+#obj has mesh-texture combination. thats called model.(combined mesh)
+
+# mesh has vao-texture.
+# obj has meshs. its middle form.
+# model has texture, meshs. a complete 3dmodel. ready to draw. get_flag.
+# actor has model, collmodel. fine. and animation maybe.
+# world has actor, light, camera. and draws all.
+
+#we need to keep vao texture data,, ..not! we load each time.
+
+#mesh.textureID
+# if texture.name == : dict[ID]=texture
+
+#by dir name. fullname specifys a file.
+#byte data lentgh kinds. hash.. but too mess. but maybe the only way :data.
+#see vao.. we can make texture all by data, not by file.!
+
+#yeah. we have gl id actually! from file obj can be ..done. same source,same data.
+
+
+#this is the grand all file loaded data storage
+gl_dict = {
+    "shader" : {},
+    "texture" : {},
+    "VAO" : {},
+}
+
+#actor.texture
+#actor.mesh1.texture
+
+255 == int('0xff',base=16)
+255 == int('ff',base=16)
+
+0xFFF000 == 0xFFF<<12#(4*3)
+
+#hex(1044480) =='0xff000'
+#hex(1044480)[2:].zfill(6)
+
+class Mesh:
+    def __init__(self):
+        self.shaderID = 0
+        self.textureID = 0
+        self.VAOID = 0
+    def get_flag(self):
+        sha = self.shaderID
+        tex = self.textureID
+        vao = self.VAOID
+        #4*3=12, 4*6=24
+        return sha<<24 +tex<<12 +vao
+        #if sha*tex*vao==0:
+        #    return "000000000"
+        #sha_hex = hex(sha)[2:].zfill(3)
+        #tex_hex = hex(tex)[2:].zfill(3)
+        #vao_hex = hex(vao)[2:].zfill(3)
+        #return sha_hex+tex_hex+vao_hex
+
+
+
+class Level:
+    def __init__(self):
+        self.actor_dict = {}
+        self.light_dict = {}
+        self.camera_dict = {}
+    def save(self,txtname):
+        23
+    def load(self,txtname):
+        23
+
+    def get_actor(self, name=None):
+        if name in self.actor_dict:
+            return self.actor_dict[name]
+        return None
+
+
+
+
+
+class PollingSocket:
+    def __init__(self):
+        self.targetIP = None
+        self.connect()
+        self.data = None
+    def connect(self):
+        socket.bind()
+    def get(self):
+        data = socket.get()
+        if data:
+            self.data = data
+    def run(self):
+        thread_timer(self.get,0.01)
+    def bind_inputlayer(self, inputlayer):
+        pass
+
+#posePoll = PollingSocket()
+#posePoll.bind_inputlayer(inputlayer)
+#posePoll.run()
+
+
+
+
+
 
 def symbol_to_key(symbol, modifiers):
     """ translate keyboard,mouse input, to use directly keymap={'W':do_func}.
@@ -705,6 +886,11 @@ def symbol_to_key(symbol, modifiers):
     #======================symbol
     key = pyglet.window.key.symbol_string(symbol)
     #'1' if mouse button 1.  key.symbol_string(49) > "_1"
+    #if buttons & pyglet.window.mouse.LEFT:
+    #pass
+    #pyglet.window.mouse.buttons_string(1)
+    #'LEFT'
+    # pyglet.window.mouse.LEFT
     
     #-----mouse buttons int 1,2,4    
     if symbol == 1:
@@ -723,11 +909,10 @@ def symbol_to_key(symbol, modifiers):
     #simple mod. ctrl advantaged.
     #key.modifiers_string(65505)
     #'MOD_SHIFT|MOD_SCROLLLOCK|MOD_COMMAND|MOD_OPTION|MOD_FUNCTION'
-    #MOD_SCROLLLOCK
-    #print( pyglet.window.key.modifiers_string(modifiers) )
-
-    #print('MOD_SCROLLLOCK' in pyglet.window.key.modifiers_string(modifiers) )
+    #NOTE: MOD_SCROLLLOCK -> CTRL
+    #print( pyglet.window.key.modifiers_string(modifiers) )    
     #MOD_SHIFT|MOD_CTRL|MOD_ALT|MOD_NUMLOCK|MOD_SCROLLLOCK
+    
     mod = ''
     #if modifiers & pyglet.window.key.LCTRL:
     #elif modifiers & pyglet.window.key.LSHIFT:
@@ -741,20 +926,9 @@ def symbol_to_key(symbol, modifiers):
         key = f"{key}+{mod}"
     return key
     #we not use mouse drag. too complex. deal it as ordinary motion.
-    #if buttons & pyglet.window.mouse.LEFT:
-    #pass
-    #pyglet.window.mouse.buttons_string(1)
-    #'LEFT'
-    # pyglet.window.mouse.LEFT
-
-#--we use complex device class using threading, occurs event maybe. (or atleast holding values)
-#xboxRstick = AxisDevice(2)
-#phoneGyro = AxisDevice(3)
+    
 
 
-#badkeymap = {        'W': ('move_forward',1),
-#OFF INV -1!
-#juse all method, if value: . a line, fine.
 keymap = {
         'W': 'move_forward(0.2)',
         'S': 'move_forward(-0.2)',
@@ -767,27 +941,33 @@ keymap = {
         'M_SCROLL_UP': 'set_fov(-5)',
         'M_SCROLL_DOWN': 'set_fov(5)',
 
-        'J_LSTICK_Y': 'move_forward(0.1)',
-        'J_LSTICK_X': 'move_right(-0.1)',
+        'J_Y': 'move_forward(0.1)',
+        'J_X': 'move_right(-0.1)',
+        'J_DPAD_XY': 'halt',
+
+        'J_R1': 'set_fov(-5)',
+        'J_L1': 'set_fov(5)',
+        #'J_RY': 'move_forward(0.1)',
+        #'J_Z': 'move_forward(0.1)',
+        #'J_X': 'move_right(-0.1)',
          }
 
-#mouse_moveDXDY(1) is 2D input. 
 #1. (ratio), delivers value.  if not value:return  if you want pressed only
-#2. funcDXDY(1) specifys no a value value.
 #func
 #func(2.5)
 #funcDXDY(1)
+#_XY _DXDY _XYZ
+
+
+
+
 
 
 class InputLayer:
     """has window check. sends packed events to  Controller (2d,3d) """
-    def __init__(self, controller):
-
-        self.events = [] #eventList ..fast but not PEP8.  (list)-s (dict)_dict fine.
-        
-        #self.window_controller = Controller(target = window)
-        self.controller = controller #controller for detecting event hit.
-    
+    def __init__(self):
+        self.events = [] #eventList ..fast but not PEP8.  (list)-s (dict)_dict fine.        
+            
     def cast(self, key, value):
         event = (key,value)
         self.events.append(event)
@@ -804,6 +984,7 @@ class InputLayer:
 
         2axis,z=None. if 3axis, z=0 atleast."""
         # DEVICE_AXIS(_IFMOTION)
+        #AXIS KINDS: X XY XYZ DXDY
         # M_XY
         # M_XY_MOTION
         # M_DXDY
@@ -816,7 +997,7 @@ class InputLayer:
             event = (key, (x,y,z) )
         self.events.append(event)
 
-    def update(self,dt):
+    def update(self):
         motion_dict={}
         key_events=[]
         deliver_pack = []
@@ -882,30 +1063,41 @@ class InputLayer:
             add_event(key,value)
 
         deliver_pack.extend(key_events)
-        self.controller.deliver(deliver_pack)
+        return deliver_pack        
+
+inputlayer = InputLayer()
+window.bind_inputlayer(inputlayer)
 
 
 class Controller:
-    #__getattribute__ is for internal . 1st override, while getattr occurs if not exist.
-    #use getattr for __var
     def __init__(self, target=None):
+        self.layers = []#for high layer. window, UIworld, world
         self.targets = []
         if target:self.targets.append(target)
+        #self.target = target #for Actor.
+    
+    def add_layer(self, layer):
+        self.layers.append(layer)
 
+    def add_target(self, target):
+        self.targets.append(target)
     def set_target(self, target_s):
         if isinstance(target_s, list):
             self.targets = target_s
         else:
             self.targets = [target_s]
-    def add_target(self, target):
-        self.targets.append(target)
 
     def deliver(self, events):
+        targets = []
+        targets.extend(self.layers)
+        targets.extend(self.targets)
         for event in events:
-            for target in self.targets:
+            for target in targets:
                 key,value = event
-
+                if not hasattr(target, "keymap"): continue
                 funcname = target.keymap.get(key,'xXxXxX')
+                
+                skip_deliver = False
 
                 if funcname[-1] == ")":
                     ridx = funcname.find("(")
@@ -913,13 +1105,16 @@ class Controller:
                         mixer = funcname[ridx:]
                         mixer = float(mixer[1:-1])
                         funcname = funcname[:ridx]
-                else:
-                    value = None
+                else:# no (1.0), we not deliver value.
+                    skip_deliver = True
 
                 func = getattr(target, funcname, False)
                 if func:
-                    if value==None:# 0==False
-                        escape = func()
+                    if skip_deliver:#value==None:# 0==False +we skip when value==0, key released.
+                        if value==0:#do not when released.
+                            escape = False
+                        else:
+                            escape = func()
                     else:
                         if not isinstance(value,tuple):
                             value *= mixer
@@ -948,249 +1143,86 @@ class PlayerController(Controller):
 
 
 
-mycontroller = PlayerController()
-mycontroller.add_target(window)
-cam.keymap = keymap
-mycontroller.add_target(cam)
-
-inputlayer = InputLayer(mycontroller)
-#inputlayer.controller = mycontroller
-
-#inputlayer.controller.set_target(cam)
-#inputlayer.controller.target = cam
+playercontroller = PlayerController()
 
 
 
-#controller = cam
-
-#jlhat = AxisDevice("J_LSTICK")
-#inputlayer.add_AxisDevice(jlhat)
+#__getattribute__ is for internal . 1st override, while getattr occurs if not exist.
+#use getattr for __var
 
 
-#touch drag device created each touch.
-#controller.isdrag = True
-#controller.axisdeviceDict[ID].isdrag=True 
-#if drag_end: controller.axisdeviceDict.pop(ID)
+class Joystick:
+    @classmethod
+    def available(cls):
+        joysticks = pyglet.input.get_joysticks()
+        return len(joysticks)>0
 
-
-# e = InputEvent("mouse",key,1,x,y, dx=dx,dy=dy)
-# inputlayer.cast(ID, key,value)
-
-# #inputlayer.castAxis(ID, key,value, x,y,dx,dy)
-# inputlayer.cast(ID, key,value)
-# inputlayer.castAxis(ID, key, x,y,dx,dy)
-
-# inputlayer.castAxis(ID, key, x,y,z,dx,dy,dz)
-
-# for event in eventList:
-#     if type=="key":
-#         deliver(key)
-#     elif type=='axis':
-#         axisDict[ID][x] += x
-        
-#         axisDevice[ID].x+=x
-#         axisDevice[ID].y+=y
-
-# for key in keyboard:
-#     deliver(key)
-
-# for event in mouse:
-#     if event==key
-#     elif event==move 
-
-# [
-#  ID key value
-#  ID key value x,y,
-#  ]
-
-
-# if changed, add event
-# if type == move:
-#     axis[ID][x]+=X
-#     axis[ID][x]+=y
-
-
-#=====================================KEY EVENT
-@window.event
-def on_key_press(symbol,modifiers):
-    key = symbol_to_key(symbol,modifiers)
-    inputlayer.cast(key,1)
-@window.event      
-def on_key_release(symbol, modifiers):
-    key = symbol_to_key(symbol,modifiers)
-    inputlayer.cast(key,0)
-#=====================================MOUSE EVENT
-@window.event
-def on_mouse_press(x, y, button, modifiers):
-    key = symbol_to_key(button,modifiers)
-    if not window.ismouselock:inputlayer.cast_axis(x,y)
-    inputlayer.cast(key,1)
-@window.event
-def on_mouse_release(x, y, button, modifiers):
-    key = symbol_to_key(button,modifiers)
-    if not window.ismouselock:inputlayer.cast_axis(x,y)
-    inputlayer.cast(key,0)
-@window.event
-def on_mouse_scroll(x, y, scroll_x, scroll_y):
-    if scroll_y>0:#up
-        key = "M_SCROLL_UP"
-    elif scroll_y<0:
-        key = "M_SCROLL_DOWN"
-    if not window.ismouselock:inputlayer.cast_axis(x,y)
-    inputlayer.cast(key,1)
-
-@window.event
-def on_mouse_motion(x, y, dx, dy):
-    """motion and broadcasted once a frame"""
-    if not window.ismouselock:
-        inputlayer.cast_axis(x,y, key = "M_XY_MOTION")
-    else:
-        inputlayer.cast_axis(dx,dy, key = "M_DXDY_MOTION")
-@window.event
-def on_mouse_drag(x, y, dx, dy, buttons, modifiers):#ah, maybe when clicked, motion not occur but this.
-    #drag is pressed move. assume it move, for simple way!
-    if not window.ismouselock:
-        inputlayer.cast_axis(x,y, key = "M_XY_MOTION")
-    else:
-        inputlayer.cast_axis(dx,dy, key = "M_DXDY_MOTION")
-
-#thread, class, class runs thread, stores class attribute.. and cast to inputlayer
-#and inputlayer has casted event.fine.
-
-#class Gyroweb:
-#g=Gyroweb()
-#g.castto = inputlayer
-#g.threadrun() --casts to inputlayer
-
-#--update
-#joystick.x
-#joystick.LEFTXY
-
-# @joysticks
-# def on_leftxy:
-#     inputlayer.castAxis(ID = "J_LSTICK", x,y)
-# @joysticks
-# def on_rightxy
-
-# @joysticks
-# def on_leftkey
-
-# @joysticks
-# def on_key
-
-#https://pyglet.readthedocs.io/en/latest/modules/input.html#pyglet.input.Joystick.on_joybutton_press
-joysticks = pyglet.input.get_joysticks()
-if joysticks:
-    joystick = joysticks[0]
-    joystick.open()
-
-    #mousemapping
-    #joystickmapping
-    joystickmapDict = {
-    0:'J_A',
-    1:'J_B',
-    2:'J_X',
-    3:'J_Y',
-    4:'J_L1',
-    5:'J_R1',
-    6:'J_SELECT',
-    7:'J_START',
-    8:'J_L3',
-    9:'J_R3',
-
-    'x':'J_X',
-    'y':'J_X',
-    'rx':'J_RX',
-    'ry':'J_RX',
-
-    'z':'J_L2',
-    }
-
-    @joystick.event
-    def on_joybutton_press(joystick, button):
-        #print(joystick,button)#A B X Y L R selstart LhatRhat 012345 67 89
-        key = joystickmapDict.get(button, "unknown")
-        print(key)
-        #inputlayer.cast(key, 1)
-        pass
-
-    @joystick.event
-    def on_joybutton_release(joystick, button):
-        key = joystickmapDict.get(button, "unknown")
-        print(key)
-        #inputlayer.cast(key, 0)
-        pass
-
-    @joystick.event
-    def on_joyaxis_motion(joystick, axis, value):
-        print(axis,value) #x,y or rx,ry up -1. Z L1 R-1 0.
-        key = joystickmapDict.get(axis, "unknown")
-        #inputlayer.cast(key, value)
-        pass
-    @joystick.event
-    def on_joyhat_motion(joystick, hat_x, hat_y):
-        #print(hat_x,hat_y,'hat')#cross key R UP 1,1
-        inputlayer.cast_axis(hat_x, hat_y, key='J_DPAD_XY_MOTION')
-        pass
-
-
-# def on_joy_motion(x,y):
-#     inputlayer.castAxis(ID = "JOYSTICK", x,y)
-
-# def on_touch(ID, x,y):
-#     #inputlayer.castAxis(ID = ID, x,y)
-#     inputlayer.castAxis(ID = f"TOUCH_{ID}", x,y)
-
-# def on_button(ID, x,y):
-#     key = "J_Y"
-#     inputlayer.cast(key,state)
-
-
-#https://pyglet.readthedocs.io/en/latest/modules/input.html#pyglet.input.Joystick.on_joybutton_press
-
-
-#we hold .. idontwantit.
-
-def update(dt):
-    if not dt==0:
-        1
-        #print(1/dt)
-    #jlhat.cast(joystick.y)
-    #inputlayer.cast_axis(ID = jlhat.ID, x=joystick.x, y = joystick.y)
-    #print(joystick.x,joystick.y) #works great!
-    
-    eventpack = inputlayer.update(dt)#see what happens
-    #eventpack = aicontrollerCV.update(dt)
-    #playercontroller.deliver(eventpack)
-    playercontroller.deliver(eventpack)
-
-    UIlayer.update(dt)
-    world.update(dt)
-    #and draw
-
-
-#pyglet.clock.schedule(update)
-pyglet.clock.schedule_interval(update, 0.01) 
-
-
-class World:
     def __init__(self):
-        pass
-    def update(self, dt):
-        print(dt)
-    def set_camer(self, ID):
-        camera = self.cameraDict.get(ID)
-        if camera !=None:
-            projectionmat = camera.get_Projection()
-            viewmat = camera.get_View()
-            shader.set_Projection(projectionmat)
-            shader.set_View(viewmat)
+        joysticks = pyglet.input.get_joysticks()
+        if joysticks:
+            joystick = joysticks[0]
+            joystick.open()
+
+            self.joystick = joystick            
+
+    def bind_inputlayer(self,inputlayer):
+        joystick_mapping = {
+            0:'J_BUTTONA',
+            1:'J_BUTTONB',
+            2:'J_BUTTONX',
+            3:'J_BUTTONY',
+            4:'J_L1',
+            5:'J_R1',
+            6:'J_SELECT',
+            7:'J_START',
+            8:'J_L2',
+            9:'J_R2',
+
+            'x':'J_X_MOTION',
+            'y':'J_Y_MOTION',
+            'z':'J_Z_MOTION',
+            'rx':'J_RX_MOTION',
+            'ry':'J_RY_MOTION',
+            }
+
+        joystick = self.joystick
+
+        @joystick.event
+        def on_joybutton_press(joystick, button):
+            #print(joystick,button)#A B X Y L R selstart LhatRhat 012345 67 89
+            key = joystick_mapping.get(button, "unknown")
+            inputlayer.cast(key, 1)
+            pass
+
+        @joystick.event
+        def on_joybutton_release(joystick, button):
+            key = joystick_mapping.get(button, "unknown")
+            inputlayer.cast(key, 0)
+            pass
+
+        @joystick.event
+        def on_joyaxis_motion(joystick, axis, value):
+            #print(axis,value) #x,y or rx,ry up -1. Z L1 R-1 0.
+            key = joystick_mapping.get(axis, "unknown")
+            inputlayer.cast(key, value)
+            pass
+        @joystick.event
+        def on_joyhat_motion(joystick, hat_x, hat_y):
+            #print(hat_x,hat_y,'hat')#cross key R UP 1,1
+            inputlayer.cast_axis(hat_x, hat_y, key='J_DPAD_XY')            
+            pass
+    #https://pyglet.readthedocs.io/en/latest/modules/input.html#pyglet.input.Joystick.on_joybutton_press
 
 
-class UIWorld(World):
-    """ it's for 2d layer, same structure, has UI componants. has orthogonal cam."""
-    def __init__(self):
-        super().__init__()
+
+if Joystick.available():
+    joystick = Joystick()
+    joystick.bind_inputlayer(inputlayer)
+
+
+
+
+
 
 
 #------update loop
@@ -1202,10 +1234,330 @@ class UIWorld(World):
 #4. update by physics simulation
 #5. draw
 
-#UILayer.
-#world
+def update(dt):
+    if not dt==0:
+        1
+        #print(1/dt)
+    
+    eventpack = inputlayer.update()    
+    #eventpack = aicontrollerCV.get()
+    
+    playercontroller.deliver(eventpack)
 
-#world.cam1
+    #uiworld.update(dt)
+    #world.update(dt)
+    
+
+#pyglet.clock.schedule(update)
+pyglet.clock.schedule_interval(update, 0.01) 
+
+
+
+
+
+
+class Resource:
+    def __init__(self):
+        self.shader = {}
+        self.texture = {}
+        self.VAO = {}
+
+        #what about ID?
+        #self.sound = {}
+        #self.music = {}
+    def add(self,object):
+        #key = object.ID#thats for it
+        key =  getattr(object, "ID", None)
+        if not key:
+            print('no ID')
+            return
+        if isinstance(object, Shader):
+            self.shader[key] = object
+        elif isinstance(object, Texture):
+            self.texture[key] = object
+        elif isinstance(object, VAO):
+            self.VAO[key] = object
+        print(key, 'add resource',object)
+
+
+resource = Resource()
+resource.add(texture)
+resource.add(vaoidx)
+resource.add(shader)
+
+
+class Actor:
+    ID = 0
+    def __init__(self):
+        self.ID = Actor.ID#or uuid kinds.
+        Actor.ID+=1
+
+        self.pos = vec3(0,0,0)
+        #---gldraw
+        self.shader_ID = 0 #shader_ID or even shader.ID?? think we dont need but only ID. +save
+        self.texture_ID = 0
+        self.VAO_ID = 0
+        self.is_skipdraw = False
+
+        self.keymap = keymap
+
+        self.attr_keys = [
+        "pos",
+        "shader_ID",
+        "texture_ID",
+        "VAO_ID",
+        "is_skipdraw",
+        ]
+
+        # self.__attrdict = {}
+        # self.__attrkeys = [
+        # 'pos',
+        # 'shader_ID',
+        # 'texture_ID',
+        # 'VAO_ID',
+        # 'is_skipdraw',
+        # ]
+    # def __setattr__(self,name,value):
+    #     if name in self.__attrkeys:
+    #         self.__attrdict[name] = value
+    #     else:
+    #         super().__setattr__(name, value)
+
+    # def __getattr__(self,name):
+    #     if name in self.__attrkeys:
+    #         return self.__attrdict[name]
+    #     else:
+    #         super().__getattr__(name)
+
+    #     #setattr(target, name, value)
+
+    # def xx__getattribute__(self,attr):
+    #     getter = super().__getattribute__
+    #     if attr in getter("attrs_to_override"):
+    #         getter("docustomstuff")(attr)
+    #     return getter(attr)
+
+
+    def savestr(self):
+        # vec3 ->list. False false.  NOTE: None->null, tuple->list.
+        outdict = {}
+        for key in self.attr_keys:
+            outdict[key] = getattr(self,key)
+        # outdict = {
+        # 'pos' : self.pos,
+        # 'shader_ID' : self.shader_ID,
+        # 'texture_ID' : self.texture_ID,
+        # 'VAO_ID' : self.VAO_ID,
+        # 'is_skipdraw' : self.is_skipdraw,
+        # }
+        return json.dumps(outdict)
+
+    def loadstr(self, string):
+        indict = json.loads(string)
+        for key,value in indict.items():
+            setattr(self,key,value)
+        # self.pos = indict['pos']
+        # self.shader_ID = indict['shader_ID']
+        # self.texture_ID = indict['texture_ID']
+        # self.VAO_ID = indict['VAO_ID']
+        # self.is_skipdraw = indict['is_skipdraw']
+
+    def copy(self):
+        actor = Actor()
+        #-----i hope these can be sent all in once, by dict kinds..
+        actor.pos = vec3(self.pos)#fine.
+        actor.shader_ID = self.shader_ID
+        actor.texture_ID = self.texture_ID
+        actor.VAO_ID = self.VAO_ID
+        actor.is_skipdraw = self.is_skipdraw
+        return actor
+
+    def get_Model(self):
+        x,y,z = self.pos
+        return translate(eye4(),x,y,z)
+
+    #def destroy(self):        wecannot refer world. let world delete it.
+
+    #Actor_saveload (small means method.) see Actor_method_saveload is too long.
+    #-00these kinds .. we expend  Actor_Movable kinds. not pawn.
+    def move_forward(self, value):
+        if not value:return
+        self.pos += vec3(0,0,-value)
+    def move_right(self, value):
+        if not value:return
+        self.pos += vec3(value,0,0)
+
+#SaveActor
+#Unit(Actor, Actor_save, ) #Actor_save only for methods.
+
+actor = Actor()
+actor.shader_ID = shader.ID
+actor.texture_ID = texture.ID
+actor.VAO_ID = vaoidx.ID
+
+
+#level = []
+class World:
+    def __init__(self):
+        self.actor_dict = {}
+        self.camera_dict = {}
+        self.light_dict = {}
+
+        #---sort kinds.
+        self.gl_sortedID = []
+        self.gl_sort_required = True
+
+        #self.controlltarget = None#moved to Controller.
+
+        self.keymap = {"C":"create_plate"}
+    def create_plate(self):
+        actor = Actor()
+        x=0#x = random.random()
+        y=0#y = random.random()
+        y=2
+        z = random.random()*2
+        actor.pos = vec3(x,y,z)
+        actor.shader_ID = shader.ID
+        actor.texture_ID = texture.ID
+        actor.VAO_ID = vaoidx.ID
+        self.add_actor(actor)
+
+    def add_actor(self,actor):
+        self.actor_dict[actor.ID] = actor
+    def add_camera(self,camera):
+        self.camera_dict[camera.ID] = camera
+    def get_actor(self, name=None):
+        actor = self.actor_dict.get(idx, None)
+        if actor:
+            return actor
+    def get_camera(self, idx=0):#note  idx or camera.ID.. what to use?
+        cam = self.camera_dict.get(idx, None)
+        if cam:
+            return cam
+
+    def remove_actor(self,actor):#pop..nah..       #should we input ID directly? 
+        #actor = self.actor_dict[actor.ID]
+        actor = self.actor_dict.pop(actor.ID)#..pop!
+        #its done here. it not drawed.. neither updated.. we only access bia world.
+        #check controller target to None..
+
+    def update(self, dt):
+        print(dt)
+    def set_camer(self, ID):#deprecated. fine.
+        camera = self.cameraDict.get(ID)
+        if camera !=None:
+            projectionmat = camera.get_Projection()
+            viewmat = camera.get_View()
+            shader.set_Projection(projectionmat)
+            shader.set_View(viewmat)
+
+    def gl_sort_ID(self):
+        shader_dict = {}
+        texture_dict = {}
+        vao_dict = {}
+        for ID, actor in self.actor_dict.items():
+            shader_dict[ID] = actor.shader_ID
+            texture_dict[ID] = actor.texture_ID
+            vao_dict[ID] = actor.VAO_ID
+
+        length_list = []
+        length_list.append( (len(set(shader_dict.values())) ,shader_dict) )
+        length_list.append( (len(set(texture_dict.values())) ,texture_dict) )
+        length_list.append( (len(set(vao_dict.values())) ,vao_dict) )
+
+        sorted_list = sorted(length_list, key = lambda k: k[0] ) #by length.fine.
+        #print(sorted_list)#[(1, {0: 3}), (1, {0: 1}), (1, {0: 2})]
+        book={}
+        book[0] = sorted_list[0][1]#{0: 3}
+        book[1] = sorted_list[1][1]
+        book[2] = sorted_list[2][1]
+
+        sorted_key = sorted(self.actor_dict, key=lambda k: (book[0][k],book[1][k],book[2][k]) )
+        self.gl_sortedID =sorted_key
+        #return sorted_key
+
+    def draw(self):
+        #proejction
+        #view
+        #shader.set_Projection(projectionmat)
+        #shader.set_View(viewmat)
+
+        camera = self.get_camera()
+        
+        if self.gl_sort_required:
+            self.gl_sort_ID()
+        #-----------draw
+        sha_last=0
+        tex_last=0
+        vao_last=0
+        for ID in self.gl_sortedID:
+            actor = self.actor_dict[ID]
+            if actor.is_skipdraw:
+                continue#to next iter
+            modelmat = actor.get_Model()
+
+            sha_ID = actor.shader_ID
+            tex_ID = actor.texture_ID
+            vao_ID = actor.VAO_ID
+
+            sha = resource.shader[sha_ID]
+            vao = resource.VAO[vao_ID]
+            tex = resource.texture[tex_ID]
+
+            if not sha_last == sha_ID:
+                sha.bind()
+                sha_last = sha_ID
+            if not tex_last == tex_ID:
+                tex.bind()
+                tex_last = tex_ID
+            if not vao_last == vao_ID:
+                vao.bind()
+                vao_last = vao_ID
+            
+            projectionmat = camera.get_Projection()
+            viewmat = camera.get_View()
+            sha.set_Projection(projectionmat)
+            sha.set_View(viewmat)    
+            sha.set_Model(modelmat)
+            
+            sha.set_Model(modelmat)
+            vao.draw()
+
+
+world = World()
+actor.keymap = {
+"W":"move_forward(1)",
+"D":"move_right(1)",
+"S":"move_forward(-1)",
+"A":"move_right(-1)",
+}
+world.add_actor(actor)
+
+newactor = actor.copy()
+newactor.pos.x -= 1
+world.add_actor(newactor)
+
+#cam.target
+cam.actor = actor
+world.add_camera(cam)
+
+
+
+playercontroller.add_layer(window)
+playercontroller.add_layer(world)
+#cam.keymap = keymap
+
+#playercontroller.add_target(cam)
+#playercontroller.add_target(actor)
+#playercontroller.set_target([])#to empty
+playercontroller.set_target([cam,actor])
+
+
+
+class UIworld(World):
+    """ it's for 2d layer, same structure, has UI componants. has orthogonal cam."""
+    def __init__(self):
+        super().__init__()
 
 
 
@@ -1218,6 +1570,10 @@ def gldraw():
     #glClear(GL_COLOR_BUFFER_BIT)
     glClearColor(0.0, 0.24, 0.5, 1.0)
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
+
+    world.draw()
+
+    return
 
     #program = default_shader
     #glUseProgram(program)
