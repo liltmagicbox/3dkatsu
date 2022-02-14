@@ -991,7 +991,7 @@ class InputLayer:
         # M_DXDY_MOTION
         # J_DPAD_XY
         # J_DPAD_XY_MOTION        
-        if z==None:
+        if z is None:# better than == None
             event = (key, (x,y) )
         else:
             event = (key, (x,y,z) )
@@ -1087,53 +1087,75 @@ class Controller:
         else:
             self.targets = [target_s]
 
-    def deliver(self, events):
+    def broadcast(self, events):
         targets = []
         targets.extend(self.layers)
         targets.extend(self.targets)
         for event in events:
             for target in targets:
-                key,value = event
-                if not hasattr(target, "keymap"): continue
-                funcname = target.keymap.get(key,'xXxXxX')
-                
-                skip_deliver = False
+                consume = self.deliver(target,event)
+                if consume:break
+                #we not transfer to child. parent only get event. gun 'K':fire nonsense. human fires.
 
-                if funcname[-1] == ")":
-                    ridx = funcname.find("(")
-                    if not ridx == -1:
-                        mixer = funcname[ridx:]
-                        mixer = float(mixer[1:-1])
-                        funcname = funcname[:ridx]
-                else:# no (1.0), we not deliver value.
-                    skip_deliver = True
+                # maxrecursion = 5
+                # while maxrecursion:#prevent stuck in loop. max_depth
+                #     #print(maxrecursion,target) if maxrecursion<5 else 1
+                #     child_ID = getattr(target, "child_ID", None)
+                #     if child_ID:
+                #         maxrecursion-=1
+                #         target = world.get_actor(child_ID)
+                #         consume = self.deliver(target,event)
+                #         if consume:break#for childs.
+                #     else:
+                #         break
 
-                func = getattr(target, funcname, False)
-                if func:
-                    if skip_deliver:#value==None:# 0==False +we skip when value==0, key released.
-                        if value==0:#do not when released.
-                            escape = False
-                        else:
-                            escape = func()
-                    else:
-                        if not isinstance(value,tuple):
-                            value *= mixer
-                            escape = func(value)
-                        else:
-                            lenval = len(value)
-                            if lenval==2:
-                                x,y = value
-                                x*=mixer
-                                y*=mixer
-                                escape = func(x,y)
-                            elif lenval==3:
-                                x,y,z = value
-                                x*=mixer
-                                y*=mixer
-                                z*=mixer
-                                escape = func(x,y,z)                    
-                    if escape:break # we skip to check next target
 
+
+    @classmethod
+    def deliver(cls,target,event):
+        """ key,value = event, value 1.0, (1,2),(1,2,3) return True if consume"""
+        key,value = event
+        if not hasattr(target, "keymap"):
+            return
+        funcname = target.keymap.get(key,None)
+        if funcname is None:
+            return
+        
+        skip_deliver = False
+
+        if funcname[-1] == ")":
+            ridx = funcname.find("(")
+            if not ridx == -1:
+                mixer = funcname[ridx:]
+                mixer = float(mixer[1:-1])
+                funcname = funcname[:ridx]
+        else:# no (1.0), we not deliver value.
+            skip_deliver = True
+
+        func = getattr(target, funcname, False)
+        if func:
+            if skip_deliver:#value is None:# 0==False +we skip when value==0, key released.
+                if value==0:#do only pressed
+                    return
+                else:
+                    return func()
+            else:
+                if not isinstance(value,tuple):
+                    value *= mixer
+                    return func(value)
+                else:
+                    lenval = len(value)
+                    if lenval==2:
+                        x,y = value
+                        x*=mixer
+                        y*=mixer
+                        return func(x,y)
+                    elif lenval==3:
+                        x,y,z = value
+                        x*=mixer
+                        y*=mixer
+                        z*=mixer
+                        return func(x,y,z)
 
 
 class PlayerController(Controller):
@@ -1242,7 +1264,7 @@ def update(dt):
     eventpack = inputlayer.update()    
     #eventpack = aicontrollerCV.get()
     
-    playercontroller.deliver(eventpack)
+    playercontroller.broadcast(eventpack)
 
     #uiworld.update(dt)
     #world.update(dt)
@@ -1299,15 +1321,31 @@ class Actor:
         self.VAO_ID = 0
         self.is_skipdraw = False
 
-        self.keymap = keymap
+        self.keymap = {}#this is basic form. not None. .get err at Controller.deliver.
 
+        self.parent_ID = None
+        self.child_ID_list = [] #child can be multiple.
+
+        #self.attr_classdict = {'pos':vec3, }
+        self.attr_vec3 = ('pos',)
         self.attr_keys = [
         "pos",
+        "keymap",
+
         "shader_ID",
         "texture_ID",
         "VAO_ID",
         "is_skipdraw",
         ]
+
+    def add_child(self,child):
+        self.child_ID_list.append(child.ID)
+    def set_child(self, child_s):
+        """set_childs too bad name. we know it is list, from add_child method. """
+        if isinstance(child_s, list):
+            self.child_ID_list = [ child.ID for child in child_s]
+        else:
+            self.child_ID_list = [child_s.ID]
 
         # self.__attrdict = {}
         # self.__attrkeys = [
@@ -1355,7 +1393,10 @@ class Actor:
     def loadstr(self, string):
         indict = json.loads(string)
         for key,value in indict.items():
-            setattr(self,key,value)
+            if key in self.attr_vec3:
+                setattr(self,key, vec3(value) )
+            else:
+                setattr(self,key,value)
         # self.pos = indict['pos']
         # self.shader_ID = indict['shader_ID']
         # self.texture_ID = indict['texture_ID']
@@ -1365,11 +1406,18 @@ class Actor:
     def copy(self):
         actor = Actor()
         #-----i hope these can be sent all in once, by dict kinds..
-        actor.pos = vec3(self.pos)#fine.
-        actor.shader_ID = self.shader_ID
-        actor.texture_ID = self.texture_ID
-        actor.VAO_ID = self.VAO_ID
-        actor.is_skipdraw = self.is_skipdraw
+        #we did.
+        for key in self.attr_keys:
+            value = getattr(self,key)
+            if key in self.attr_vec3:
+                setattr(actor,key, vec3(value) )
+            else:
+                setattr(actor,key,value)
+        #actor.pos = vec3(self.pos)#fine.
+        #actor.shader_ID = self.shader_ID
+        #actor.texture_ID = self.texture_ID
+        #actor.VAO_ID = self.VAO_ID
+        #actor.is_skipdraw = self.is_skipdraw
         return actor
 
     def get_Model(self):
@@ -1414,7 +1462,7 @@ class World:
         actor = Actor()
         x=0#x = random.random()
         y=0#y = random.random()
-        y=2
+        y=1
         z = random.random()*2
         actor.pos = vec3(x,y,z)
         actor.shader_ID = shader.ID
@@ -1426,10 +1474,15 @@ class World:
         self.actor_dict[actor.ID] = actor
     def add_camera(self,camera):
         self.camera_dict[camera.ID] = camera
-    def get_actor(self, name=None):
-        actor = self.actor_dict.get(idx, None)
+    def get_actor(self, ID):
+        actor = self.actor_dict.get(ID, None)
         if actor:
             return actor
+    def get_actor_name(self, name):
+        for ID , actor in self.actor_dict.items():        
+            if actor.name == name:
+                return actor
+
     def get_camera(self, idx=0):#note  idx or camera.ID.. what to use?
         cam = self.camera_dict.get(idx, None)
         if cam:
@@ -1525,32 +1578,44 @@ class World:
 
 
 world = World()
+
+newactor = actor.copy()
+newactor.pos.x -= 1
+world.add_actor(newactor)
+
+
 actor.keymap = {
 "W":"move_forward(1)",
 "D":"move_right(1)",
 "S":"move_forward(-1)",
 "A":"move_right(-1)",
 }
+actor.pos.z+=2
 world.add_actor(actor)
 
-newactor = actor.copy()
-newactor.pos.x -= 1
-world.add_actor(newactor)
-
+#cam.keymap = keymap
 #cam.target
 cam.actor = actor
 world.add_camera(cam)
 
-
-
-playercontroller.add_layer(window)
-playercontroller.add_layer(world)
-#cam.keymap = keymap
-
 #playercontroller.add_target(cam)
 #playercontroller.add_target(actor)
 #playercontroller.set_target([])#to empty
+playercontroller.add_layer(window)
+playercontroller.add_layer(world)
 playercontroller.set_target([cam,actor])
+
+
+allnewactor = newactor.copy()#keymap also copied?
+allnewactor.pos.y += 1
+allnewactor.keymap = actor.keymap #copyied now. donno we need it or not.
+world.add_actor(allnewactor)
+playercontroller.add_target(allnewactor)
+
+
+#actor.child_ID = newactor.ID
+#actor.add_child#no effect yet.fine. maybe in update..
+
 
 
 
