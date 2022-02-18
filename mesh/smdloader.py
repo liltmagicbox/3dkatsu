@@ -8,12 +8,6 @@ from os.path import join, split
 
 #mesh.save_obj(fname)
 
-
-#mesh.to_atlas()
-#mesh.merge()
-#mesh.save_atlas()
-
-
 #meshes = []
 
 class Mesh:
@@ -33,14 +27,103 @@ class Mesh:
 		sevasu
 	
 	@classmethod
-	def atlas(cls, meshes):
-				
+	def merge(cls, meshes):
+		new_mesh = Mesh()
+		for mesh in meshes:
+			for key, value in mesh.vert_dict.items():
+				new_mesh.vert_dict[key].extend(value)
+
+			new_mesh.indices.extend(mesh.indices)
+		
+		head = mesh.filename.split('.')[0]
+		new_mesh.name = head
+		file = f'{head}_atlas.png'
+		mesh.material['name'] = f'{head}_atlas'
+		
+		#mesh.material['shader']
+		#mesh.material['texture']['diffuse'] = 
+		for key in mesh.material['texture']:
+			mesh.material['texture'][key] = file
+
+
+
+
+
+	@classmethod
+	def atlas(cls, meshes, SIZE = 2048):
+		w_before =0
+		h_before =0
+		cc=0
+		atlas = Image.new('RGBA', (SIZE,SIZE) )
+
+		#for texture in mesh.material['texture']
+
+		coord_dict = {}
+		for mesh in meshes:
+			mtl = mesh.material['name'] #if we use multiple textures,,
+			fname = f"{mtl}.png"
+			fdir = join(dirname,fname)
+			img = Image.open(fdir)
+			w,h = img.size	
+			if w_before + w <= SIZE:
+				#atlas.paste(img, (w_before,h_before ) )
+				imgxa,imgya, imgxb,imgyb = (w_before,SIZE-h_before-h, w_before+w, SIZE-h_before)
+				atlas.paste(img, (imgxa,imgya, imgxb,imgyb) )
+				cc+=1
+
+				offset_x,offset_y,width_x,width_y = w_before,h_before, w,h
+				coord_dict[mtl] = (offset_x,offset_y,width_x,width_y)
+
+				w_before+=w#note it's last line
+
+			else:
+				w_before=0
+				h_before+=h
+				if h_before + h <= SIZE:
+					#atlas.paste(img, (w_before,h_before) )
+					imgxa,imgya, imgxb,imgyb = (w_before,SIZE-h_before-h, w_before+w, SIZE-h_before)
+					atlas.paste(img, (imgxa,imgya, imgxb,imgyb) )
+					cc+=1
+					
+					offset_x,offset_y,width_x,width_y = w_before,h_before, w,h
+					coord_dict[mtl] = (offset_x,offset_y,width_x,width_y)
+				else:
+					print('size over!')
+			img.close()
+
+		print(cc,'of texture merged')
+		head = mesh.filename.split('.')[0]
+		file = f'{head}_atlas.png'
+		path = mesh.path
+
+		atlas.save( join(path,file) )#or running dir?
+		
+		#------------phase2, uv slide
+		for mesh in meshes:
+			uvlist = mesh.vert_dict['uv']
+			mtl = mesh.material['name']
+			ox,oy, w,h = coord_dict[mtl]
+
+			new_uvlist = []
+			for i in range( len(uvlist)//2 ):
+				u = uvlist[2*i+0]
+				v = uvlist[2*i+1]				
+				new_u = ox/SIZE+ u*w/SIZE
+				new_v = oy/SIZE+ v*h/SIZE
+				new_uvlist.append(new_u)
+				new_uvlist.append(new_v)
+			mesh.vert_dict['uv'] = new_uvlist
+
+			mesh.material['name']
+			mesh.atlasname = file
+
+
 
 	@classmethod
 	def sort_bysize(cls, meshes):				
 		fdir_dict = {}
 		def img_height(mesh):
-			mtl = mesh.material
+			mtl = mesh.material['name']
 			fname = f"{mtl}.png"
 
 			fdir = join(mesh.path,fname)
@@ -62,10 +145,17 @@ class Mesh:
 		self.vert_dict['position'] = []
 		self.vert_dict['normal'] = []
 		self.vert_dict['uv'] = []
-		self.vert_dict['weights'] = []
+		self.vert_dict['weights'] = []# (str, str,str,,)
 		self.indices = []
-		self.material = None
+		self.material = {} #if complex mtl, shader..texture..fine. from smd is diffuse only.
+		self.material['name'] = ''
+		self.material['shader'] = {}#idonno whether filedir ..or full string or..		
+		self.material['texture'] = {}
+
+		self.name = ''#is actually, usually by material namme.
 		self.path = ''
+		self.filename = ''
+		self.atlasname=None
 
 
 
@@ -177,15 +267,28 @@ def load_smd(fdir, END = 'end'):
 
 		for vtuple in vertices:
 			pbone, x,y,z, nx,ny,nz, u,v, *args = vtuple #args links, bId-w
+			pbone = int(pbone)
+			x = float(x)
+			y = float(y)
+			z = float(z)
+			nx = float(nx)
+			ny = float(ny)
+			nz = float(nz)
+			u = float(u)
+			v = float(v)
+
 			mesh.vert_dict['parent_bone'].append(pbone)
 			mesh.vert_dict['position'].extend([x,y,z])
 			mesh.vert_dict['normal'].extend([nx,ny,nz])
 			mesh.vert_dict['uv'].extend([u,v])
-			mesh.vert_dict['weights'].append(args)#remain thisway.
+			mesh.vert_dict['weights'].append(args)#remain thisway. args str..
 
 		mesh.indices = indices
-		mesh.material = mtl
+		#mesh.material['texture']['diffuse'] = mtl#not here
+		mesh.material['name'] = mtl
+		mesh.name = mtl
 		mesh.path = path
+		mesh.filename = file
 		meshes.append(mesh)
 
 	return_tuple = {}
@@ -205,70 +308,15 @@ meshes = Mesh.from_smd(fdir)
 meshes = Mesh.sort_bysize(meshes)
 #print(meshes[:5])
 
-Mesh.atlas(meshes)
+meshes = Mesh.atlas(meshes)# mesh UV offset,resized.
+mesh = Mesh.merge(meshes)#atlas ed -> single mesh, finally.
+
 
 exit()
 
 
 #----------------------------------------------atlasing
 
-# fdir_dict = {}
-# #print(data_dict)
-# for pri in data_dict['triangles']:
-# 	mtl = pri['mtl']
-# 	fname = f"{mtl}.png"
-# 	fdir = join(dirname,fname)
-# 	img = Image.open(fdir)
-# 	print(mtl, img.size)
-# 	w,h = img.size
-# 	fdir_dict[mtl] = h
-# 	img.close()
-
-# sorted_mtl = sorted(fdir_dict, key=lambda k: fdir_dict[k] )
-
-
-SIZE = 2048
-w_before =0
-h_before =0
-cc=0
-atlas = Image.new('RGBA', (SIZE,SIZE) )
-
-coord_dict = {}
-
-for mtl in sorted_mtl:
-	fname = f"{mtl}.png"
-	fdir = join(dirname,fname)
-	img = Image.open(fdir)
-	w,h = img.size	
-	if w_before + w <= SIZE:
-		#atlas.paste(img, (w_before,h_before ) )
-		imgxa,imgya, imgxb,imgyb = (w_before,SIZE-h_before-h, w_before+w, SIZE-h_before)
-		atlas.paste(img, (imgxa,imgya, imgxb,imgyb) )
-		cc+=1
-
-		offset_x,offset_y,width_x,width_y = w_before,h_before, w,h
-		coord_dict[mtl] = (offset_x,offset_y,width_x,width_y)
-
-		w_before+=w#note it's last line
-
-	else:
-		w_before=0
-		h_before+=h
-		if h_before + h <= SIZE:
-			#atlas.paste(img, (w_before,h_before) )
-			imgxa,imgya, imgxb,imgyb = (w_before,SIZE-h_before-h, w_before+w, SIZE-h_before)
-			atlas.paste(img, (imgxa,imgya, imgxb,imgyb) )
-			cc+=1
-			
-			offset_x,offset_y,width_x,width_y = w_before,h_before, w,h
-			coord_dict[mtl] = (offset_x,offset_y,width_x,width_y)
-		else:
-			print('size over!')
-	img.close()
-
-print(cc,'of texture merged')
-
-atlas.save('ham.png')
 
 #----------------------------------------------atlasing
 
