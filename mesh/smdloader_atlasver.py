@@ -7,27 +7,19 @@ import os
 
 class Mesh:
 	""" python object for internal usage ..and little to glTF"""
-	def __init__(self):
-		self.attributes = {}#position normal uv
-		self.indices = None
-		self.material = None
-		#self.name = None not native. it's too artificial.
+	@classmethod
+	def from_smd(cls, fdir):
+		resultdict = load_smd(fdir)
+		return resultdict['meshes'] #of Mesh.
 
 	@classmethod
-	def load_smd(cls, fdir):
-		resultdict = smd_load(fdir)
-		return resultdict
-		#return resultdict['meshes'] #of Mesh.
-	@classmethod
-	def load_obj(cls, fdir):
+	def from_obj(cls, fdir):
 		1
+		#resultdict = load_smd(fdir)
+		#return resultdict['meshes'] #of Mesh.
+
 	@classmethod
 	def save_obj(cls, meshes, fdir):
-		obj_save(meshes,fdir)
-
-
-#============================================================
-def obj_save(meshes,fdir):
 		lines = []
 		header = "# obj created from meshes"
 		lines.append(header)
@@ -172,11 +164,44 @@ def obj_save(meshes,fdir):
 			mtldir = fdir+'.mtl'
 		with open(mtldir, 'w', encoding = 'utf-8') as f:
 			f.write(fullline)
+	
+	@classmethod
+	def merge(cls, meshes):
+		new_mesh = Mesh()
+		mesh1 = meshes[0]
+		# 1,2,3, 4,5,6 is vert
+		# 0,1,2, 0,1,2 is ind
+		# 0,1,2, 3,4,5 is ind_fixed
+		# 0,1,2, len(before)+..
+		#we need to add: before points number.
+		points_before = 0
+		for mesh in meshes:
+			for key, value in mesh.vert_dict.items():
+				new_mesh.vert_dict[key].extend(value)
+
+			#brute way
+			for idx in mesh.indices:
+				new_mesh.indices.append(idx+points_before)			
+			points_before += len(mesh.vert_dict['position'])//3
+		
+		new_mesh.texture = mesh1.texture #since atlas, we do so.fine.
+		new_mesh.shader = mesh1.shader
+		new_mesh.path = mesh1.path #same, ofcourse.fine.
+		new_mesh.modelname = mesh1.modelname #if from filename, same all. fine.
+		new_mesh.name = mesh1.modelname #..is ..what? ..is no more useful. overwrite it.
+		#self.modelname = ''#is from modelname.obj
+		#self.path = '' #atlas, merge, only same path.
+		#self.name = '' #name = part of modelname.obj
+		#self.texture = {}# starting diffuse
+		#self.shader = {}#both loaded while GL runnin
+		return new_mesh
 
 
 
-#hopely we dont alas, its for .. big building..
-def atlas(cls, meshes, SIZE = 2048):
+
+
+	@classmethod
+	def atlas(cls, meshes, SIZE = 2048):
 		"""we assume all channels same size. we have 4096 over problem, too!"""
 		def save_atlas(channel, onlyonetexture = False):
 			cc=0
@@ -295,59 +320,50 @@ def atlas(cls, meshes, SIZE = 2048):
 		#return meshes
 		return meshes_atlas, meshes_left
 
-def merge(cls, meshes):
-	new_mesh = Mesh()
-	mesh1 = meshes[0]
-	# 1,2,3, 4,5,6 is vert
-	# 0,1,2, 0,1,2 is ind
-	# 0,1,2, 3,4,5 is ind_fixed
-	# 0,1,2, len(before)+..
-	#we need to add: before points number.
-	points_before = 0
-	for mesh in meshes:
-		for key, value in mesh.vert_dict.items():
-			new_mesh.vert_dict[key].extend(value)
+	@classmethod
+	def sort_bysize(cls, meshes):				
+		fdir_dict = {}
+		def img_height(mesh):
+			fname = mesh.texture['diffuse']
+			fdir = join(mesh.path,fname)
 
-		#brute way
-		for idx in mesh.indices:
-			new_mesh.indices.append(idx+points_before)			
-		points_before += len(mesh.vert_dict['position'])//3
+			try:
+				#--------img
+				img = Image.open(fdir)
+				#print( img.size)
+				w,h = img.size
+				#fdir_dict[mtl] = h
+				img.close()
+				#--------img
+			except:
+				h=123
+
+			return h
+		sorted_meshes = sorted(meshes, key=img_height )
+		return sorted_meshes
+		#sorted_meshes = sorted(meshes, key=lambda mesh: mesh.height )
+		#sorted_mtl = sorted(fdir_dict, key=lambda k: fdir_dict[k] )
+
 	
-	new_mesh.texture = mesh1.texture #since atlas, we do so.fine.
-	new_mesh.shader = mesh1.shader
-	new_mesh.path = mesh1.path #same, ofcourse.fine.
-	new_mesh.modelname = mesh1.modelname #if from filename, same all. fine.
-	new_mesh.name = mesh1.modelname #..is ..what? ..is no more useful. overwrite it.
-	#self.modelname = ''#is from modelname.obj
-	#self.path = '' #atlas, merge, only same path.
-	#self.name = '' #name = part of modelname.obj
-	#self.texture = {}# starting diffuse
-	#self.shader = {}#both loaded while GL runnin
-	return new_mesh
+	def __init__(self):
+		self.modelname = ''#is from modelname.obj
+		self.path = '' #atlas, merge, only same path.
+		self.name = '' #name = part of modelname.obj
 
-def sort_bysize(cls, meshes):				
-	fdir_dict = {}
-	def img_height(mesh):
-		fname = mesh.texture['diffuse']
-		fdir = join(mesh.path,fname)
+		#attributes can be vary.
+		self.vert_dict = {}
+		self.vert_dict['position'] = []
+		self.vert_dict['normal'] = []
+		self.vert_dict['uv'] = []
+		
+		self.indices = []
 
-		try:
-			#--------img
-			img = Image.open(fdir)
-			#print( img.size)
-			w,h = img.size
-			#fdir_dict[mtl] = h
-			img.close()
-			#--------img
-		except:
-			h=123
+		self.texture = {}# starting diffuse
+		self.shader = {}#both loaded while GL running
+		
 
-		return h
-	sorted_meshes = sorted(meshes, key=img_height )
-	return sorted_meshes
-	#sorted_meshes = sorted(meshes, key=lambda mesh: mesh.height )
-	#sorted_mtl = sorted(fdir_dict, key=lambda k: fdir_dict[k] )
-#============================================================
+
+
 
 
 
@@ -359,7 +375,7 @@ def add_vertex(line, vert_dict, idxlist ):
 	assert pbone == '0' #or xyz+=pxyz
 	vert_data = [pbone, x,y,z,nx,ny,nz,u,v, links]
 	
-	iters = len(args)//2 #0 if [0]
+	iters = len(args)//2
 	for i in range(iters):
 		boneID, weight = args[0+i], args[1+i]
 		vert_data.append(boneID)
@@ -380,7 +396,7 @@ def add_vertex(line, vert_dict, idxlist ):
 
 
 
-def triangles_load(lines, pointer, END):
+def triangles_load(lines, pointer, END = 'end'):
 	pp = 0
 	tris = {}
 	while True:
@@ -414,59 +430,11 @@ def triangles_load(lines, pointer, END):
 	return tris_list, pointer
 
 
-def nodes_load(lines, pointer, END):
-	bones = []
-	while True:
-		line = lines[pointer].strip()
-		if line == END:
-			break
-		#0 "L_Cool_00_rousoku" -1
-		#boneID, bonename, parent
-		boneID, bonename, parent = line.split()
-		bone = {}
-		bone['ID'] = int(boneID)
-		bone['name'] = bonename.replace('"','')# '"name"'
-		bone['parent'] = int(parent)
-		bones.append( bone )
-		pointer+=1
-	return bones,pointer
-
-def skeleton_load(lines, pointer, END):
-	skam = {}
-	bones = []
-	timenow = None
-	while True:
-		line = lines[pointer].strip()
-		if line == END:
-			skam[timenow] = bones			
-			break
-		if line.startswith('time'):
-			nah,frame = line.split()
-			frame = int(frame)
-			timenow = frame
-			if not bones == []:
-				skam[frame] = bones
-				bones = []
-			pointer+=1
-			continue
-		#time 0
-		#0 0 0 0 0 0 0
-		#id x y z a b c
-		boneID, x,y,z,a,b,c = line.split()
-		bone = {}
-		bone['ID'] = int(boneID)
-		bone['x'] = float(x)
-		bone['y'] = float(y)
-		bone['z'] = float(z)
-		bone['a'] = float(a)
-		bone['b'] = float(b)
-		bone['c'] = float(c)
-		bones.append( bone )
-		pointer+=1	
-	return skam,pointer
 
 
-def smd_load(fdir, END = 'end'):
+
+
+def load_smd(fdir, END = 'end'):
 	path,file = split(fdir)
 	files = os.listdir(path)
 
@@ -484,28 +452,14 @@ def smd_load(fdir, END = 'end'):
 	while pointer<len(lines):
 		line = lines[pointer].strip()
 
-		if line == 'nodes':
-			pointer+=1
-			data, pointer = nodes_load(lines,pointer, END=END)
-			data_dict[line] = data
-		if line == 'skeleton':
-			pointer+=1
-			data, pointer = skeleton_load(lines,pointer, END=END)
-			data_dict[line] = data
+		#if line == 'nodes':
+		#if line == 'skeleton':
 		if line == 'triangles':
 			pointer+=1
-			data, pointer = triangles_load(lines,pointer, END=END)
-			data_dict[line] = data
+			tris, pointer = triangles_load(lines,pointer)
+			data_dict[line] = tris
 		pointer+=1
 
-	#================parse data.
-	#--------bone
-	nodes = data_dict['nodes']
-	bones=nodes
-
-	#--------skam
-	skeletons = data_dict['skeleton']
-	skams = skeletons
 
 	#---------------tri to mesh
 	tris = data_dict['triangles']
@@ -515,11 +469,7 @@ def smd_load(fdir, END = 'end'):
 		vertices = tri['vertices'] # is (p,x,y,z,a,b,c,u,v,link):0 tuple.
 		indices = tri['indices']
 
-		mesh = Mesh()		
-		mesh.attributes['position'] = []
-		mesh.attributes['normal'] = []
-		mesh.attributes['uv'] = []
-		mesh.attributes['weight'] = []
+		mesh = Mesh()
 
 		for vtuple in vertices:
 			pbone, x,y,z, nx,ny,nz, u,v, *args = vtuple #args links, bId-w
@@ -534,80 +484,85 @@ def smd_load(fdir, END = 'end'):
 			v = float(v)
 
 			#----write data to mesh.
-
-			mesh.attributes['position'].extend([x,y,z])
-			mesh.attributes['normal'].extend([nx,ny,nz])
-			mesh.attributes['uv'].extend([u,v])
-
-			iters = len(args)//2
-			boneweights =[]
-			for i in range(iters):
-				boneID, weight = args[0+i], args[1+i]
-				boneweights.append(boneID)
-				boneweights.append(weight)
-			if iters>0:
-				mesh.attributes['weight'].extend( boneweights )
+			mesh.vert_dict['position'].extend([x,y,z])
+			mesh.vert_dict['normal'].extend([nx,ny,nz])
+			mesh.vert_dict['uv'].extend([u,v])			
 
 		mesh.indices = indices
-
-
-		#virtual material. with texture..
-		texture = {}
-		texture['diffuse'] = mtl+'.png'
-		#texture['diffuse'] = join(path, mtl+'.png' )
-		#texture['diffuse'] = mtl+'.png' wrap kinds. all blank now.
-
-		material = {}
-		material['name'] = mtl
-		material['shader'] = 'phong'
-		material['texture'] = texture
-		mesh.material = material
+		#smd single png assume.fine.
+		# for file in files:
+		# 	fonly = splitext(file)[0]
+		# 	meshname = fonly.split('_')[0] #body_diffuse.jpg or body.png . not model_body_dif
+		# 	if mtl == meshname:
+		# 		print('yeah',mtl)			
+		#print( mtl+'.png' in files, mtl)
+		mesh.texture['diffuse'] = mtl+'.png'
 		
 		head, ext = splitext(file)
-		#mesh.modelname = head
-		#mesh.name = mtl #we have only this clue. ..smd assume mat.name is name..
-		#mesh.path = path
+		mesh.modelname = head
+		mesh.name = mtl #we have only this clue.
+		mesh.path = path
 		meshes.append(mesh)		
 
 	return_tuple = {}
-	return_tuple['bones'] = bones
-	return_tuple['skams'] = skams
 	return_tuple['meshes'] = meshes
 	return return_tuple
 
 
+
 dirname = 'tutuL_Cool_00'
+
+#fname = 'ST_FA_03_CU01_conv.smd'
 fname = 'L_Cool_00_bg.smd'
-fname = 'L_Cool_00_rousoku.smd'
-#fname = 'L_Cool_00_rousoku_skam.smd'
+#fname = 'ST_FA_03_CU01_base.smd'
+#fname = 'CH_HYUM.smd'
+#fname = 'DR_DEF_YUM_A.smd'
 
-
-dirname = 'summers'
-fname = 'DR_P00_CUN01_T.smd'
-
+#fname = 'DR_H02_SEP01_B.smd'
 fdir = join(dirname,fname)
-loaded = Mesh.load_smd(fdir)
 
-print('----------meshes--------')
-meshes = loaded['meshes']
-for i in meshes:
-	#print(i.attributes)
-	position = i.attributes['position']
-	normal = i.attributes['normal']
-	uv = i.attributes['uv']
-	#print(i.attributes)
-	print(len(i.indices),'i')
+meshes = Mesh.from_smd(fdir)
+#for m in meshes:print(m.texture)
+#print(meshes[:5])
+meshes = Mesh.sort_bysize(meshes)
+#print(meshes[:5])
 
-	print(i.material,'m')
+#Mesh.save_obj([meshes[0]], 'test\\harrr.obj')
+#Mesh.save_obj(meshes, 'test\\harrr.obj')
 
-	#print(i.)
+#for i in meshes:
+#	print(i.name)
 
-print('----------bones--------')
-bones = loaded['bones']#list
-for i in bones:
-	print(i)
+#meshes = Mesh.atlas(meshes)# mesh UV offset,resized.
+#Mesh.save_obj(meshes, f'test\\xxxxx.obj')
 
-print('----------skams--------')
-skams = loaded['skams']# { frame: [bones] ,}
-#print(skams)
-print(len(skams))
+#mesh = Mesh.merge(meshes)#atlas ed -> single mesh, finally.
+#Mesh.save_obj([mesh], f'test\\{mesh.name}.obj')
+
+
+#we merge only atlased. fine. and after save input is list!
+ated,noted = Mesh.atlas(meshes)# mesh UV offset,resized.
+mesh_ated = Mesh.merge(ated)
+
+#--------if you want atlasted and left
+wanna_save_all = True
+
+if wanna_save_all:
+	noted.append(mesh_ated)
+	Mesh.save_obj(noted, f'{dirname}\\{mesh_ated.name}.obj')
+else:	
+	Mesh.save_obj([mesh_ated], f'{dirname}\\{mesh_ated.name}.obj')
+
+
+print('saved : ',f'test\\{mesh_ated.name}.obj')
+
+
+
+# print(dir(mesh))
+# print(mesh.vert_dict)
+# print(mesh.indices)
+# print(mesh.name)
+# print(mesh.modelname)
+# print(mesh.path)
+# print(mesh.shader)
+# print(mesh.texture)
