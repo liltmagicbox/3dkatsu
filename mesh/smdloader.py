@@ -2,6 +2,7 @@ from PIL import Image
 from os.path import join, split, splitext
 import os
 
+from math import cos,sin
 #smdreader. now tris only. smd has:[ vertex-mtl ..]. same mtl, same vert.
 
 
@@ -24,6 +25,9 @@ class Mesh:
 	@classmethod
 	def save_obj(cls, meshes, fdir):
 		obj_save(meshes,fdir)
+	def draw(self):
+		if self.isdrawready:
+			1
 
 
 #============================================================
@@ -414,8 +418,10 @@ def triangles_load(lines, pointer, END):
 	return tris_list, pointer
 
 
-def nodes_load(lines, pointer, END):
-	bones = []
+
+def sk_load(lines, pointer, END):
+	#{ id:{name,parent} }
+	skeleton = {}
 	while True:
 		line = lines[pointer].strip()
 		if line == END:
@@ -423,45 +429,56 @@ def nodes_load(lines, pointer, END):
 		#0 "L_Cool_00_rousoku" -1
 		#boneID, bonename, parent
 		boneID, bonename, parent = line.split()
-		bone = {}
-		bone['ID'] = int(boneID)
-		bone['name'] = bonename.replace('"','')# '"name"'
-		bone['parent'] = int(parent)
-		bones.append( bone )
+		ID = int(boneID)
+		name = bonename.replace('"','')# '"name"'
+		parentID = int(parent)
+		skeleton[ID]= {'name':name,'parent':parentID}#least info rule.		
 		pointer+=1
-	return bones,pointer
+	return skeleton,pointer#now it became very clear!
 
-def skeleton_load(lines, pointer, END):
+
+def euler_to_quat(roll,pitch,yaw):#rpy xyz
+	cy = cos(yaw * 0.5)
+	sy = sin(yaw * 0.5)
+	cp = cos(pitch * 0.5)
+	sp = sin(pitch * 0.5)
+	cr = cos(roll * 0.5)
+	sr = sin(roll * 0.5)
+
+	qw = cr * cp * cy + sr * sp * sy
+	qx = sr * cp * cy - cr * sp * sy
+	qy = cr * sp * cy + sr * cp * sy
+	qz = cr * cp * sy - sr * sp * cy
+	return [qx,qy,qz,qw]#not tuple. for json
+
+
+def skam_load(lines, pointer, END):	
 	skam = {}
-	bones = []
-	timenow = None
+	bonedict = {}
+	frame_now = 0
 	while True:
 		line = lines[pointer].strip()
 		if line == END:
-			skam[timenow] = bones			
+			skam[frame_now] = bonedict
 			break
 		if line.startswith('time'):
 			nah,frame = line.split()
 			frame = int(frame)
-			timenow = frame
-			if not bones == []:
-				skam[frame] = bones
-				bones = []
+			frame_now = frame
+			if not bonedict == {}:
+				skam[frame] = bonedict
+				bonedict = {}
 			pointer+=1
 			continue
 		#time 0
 		#0 0 0 0 0 0 0
 		#id x y z a b c
 		boneID, x,y,z,a,b,c = line.split()
-		bone = {}
-		bone['ID'] = int(boneID)
-		bone['x'] = float(x)
-		bone['y'] = float(y)
-		bone['z'] = float(z)
-		bone['a'] = float(a)
-		bone['b'] = float(b)
-		bone['c'] = float(c)
-		bones.append( bone )
+		ID = int(boneID)
+		x,y,z, a,b,c = map(float, (x,y,z,a,b,c) )
+		rx,ry,rz,rw = euler_to_quat(x,y,z)
+		posedata = {'trans':[x,y,z], 'rot':[rx,ry,rz,rw]}
+		bonedict[ID] = posedata
 		pointer+=1	
 	return skam,pointer
 
@@ -474,9 +491,9 @@ def smd_load(fdir, END = 'end'):
 		lines = f.readlines()	
 
 	data_dict = {
-	'nodes':None,
-	'skeleton':None,
-	'triangles':[],
+	'sk':None,
+	'skam':None,
+	'triangles':None,
 	}
 	#parentbone, x,y,z,nx,ny,nz,u,v, links, boneID,weight,
 
@@ -486,11 +503,11 @@ def smd_load(fdir, END = 'end'):
 
 		if line == 'nodes':
 			pointer+=1
-			data, pointer = nodes_load(lines,pointer, END=END)
+			data, pointer = sk_load(lines,pointer, END=END)
 			data_dict[line] = data
 		if line == 'skeleton':
 			pointer+=1
-			data, pointer = skeleton_load(lines,pointer, END=END)
+			data, pointer = skam_load(lines,pointer, END=END)
 			data_dict[line] = data
 		if line == 'triangles':
 			pointer+=1
@@ -502,7 +519,6 @@ def smd_load(fdir, END = 'end'):
 	#--------bone
 	nodes = data_dict['nodes']
 	bones=nodes
-
 	#--------skam
 	skeletons = data_dict['skeleton']
 	skams = skeletons
@@ -570,8 +586,8 @@ def smd_load(fdir, END = 'end'):
 		meshes.append(mesh)		
 
 	return_tuple = {}
-	return_tuple['bones'] = bones
-	return_tuple['skams'] = skams
+	return_tuple['sk'] = bones
+	return_tuple['skam'] = skams
 	return_tuple['meshes'] = meshes
 	return return_tuple
 
@@ -591,6 +607,7 @@ loaded = Mesh.load_smd(fdir)
 print('----------meshes--------')
 meshes = loaded['meshes']
 for i in meshes:
+	print(i)
 	#print(i.attributes)
 	position = i.attributes['position']
 	normal = i.attributes['normal']
@@ -603,11 +620,366 @@ for i in meshes:
 	#print(i.)
 
 print('----------bones--------')
-bones = loaded['bones']#list
-for i in bones:
-	print(i)
+sk = loaded['sk']#list
+print(sk)
 
 print('----------skams--------')
-skams = loaded['skams']# { frame: [bones] ,}
-#print(skams)
-print(len(skams))
+skam = loaded['skam']# { frame: [bones] ,}
+print(skam)
+skam = skam[0]
+
+class Bone:
+	def __init__(self, ID,name,parent, x,y,z,a,b,c):
+		#note if AXIS, bone nomore. bones ==axis. fine.
+		self.ID = ID
+		self.name = name
+		self.parent = parent #not ID. oop.
+
+		self.pos = (x,y,z)
+		self.rot = (a,b,c)
+		#self.scale = None
+	def get_pos(self):
+		return self.pos
+	def set_pos(self, pos):
+		self.pos = pos#quite oop..
+	def get_pos_abs(self,absdict=None):#automatically updates all..
+		# 1. if alreadydone, return that
+		# 2. if parent, get and addit.
+		# 3. when add, if dict,add. and return.
+		if absdict:
+			value = absdict.get(self.ID)
+			if value:
+				return value
+		pos = self.pos
+		if self.parent:
+			pos += parent.get_pos_abs(absdict) #chain works!			
+		if absdict:
+			absdict[self.ID] = pos
+		return pos
+
+class Skeleton:
+	def __init__(self):
+		self.bonedict = {}# for ID contact.
+	#def draw(self, shader=shader_default):
+	#def update(self,data) it shall not parse data.
+	def xxxget_pos_abs(self):
+		absposdict={}
+		for ID ,bone in self.bonedict.items():
+			bone.get_pos_abs(absposdict)
+	def xxxupdate_abs(self):#not here. since if sk is AXIS.. skam need to know it.
+		absposdict={}
+		for ID ,bone in self.bonedict.items():
+			bone.update_pos_abs(absposdict)
+	def draw(self):#finally! it treated like mesh.
+		1#get_pos_abs
+	def __repr__(self):
+		return f"Skeleton bones: {len(self.bonedict)}"
+	def add_bone(self,ID,name,parentID, trans, rot):
+		"""trans [0,0,0] rot[0,0,0,1]"""
+		self.bonedict[ID] = {
+		'name':name,
+		'parent':parentID,
+		'trans':trans,
+		'rot':rot,
+		'trans_init':trans,
+		'rot_init':rot
+		}
+	def add_sk(self, sk_dict):
+		"""sk_dict {id:{name:,parent:,trans:,rot:}}"""
+		for id, data in sk_dict:
+			name = data['name']
+			parent = data['parent']
+			trans = data.get('trans',[0,0,0])
+			rot = data.get('rot',[0,0,0,1])
+			self.add_bone(id, name,parent,trans,rot)
+	def pose_reset(self):
+		for ID in self.bonedict:
+			self.bonedict['trans'] = self.bonedict['trans_init']
+			self.bonedict['rot'] = self.bonedict['rot_init']
+	def pose_bone(self,id, trans,rot):
+		bone = self.bonedict.get(id)
+		if bone:
+			bone['trans'] = trans
+			bone['rot'] = rot
+	def pose_sk(self,pose_dict):
+		for id, data in pose_dict:
+			trans = data.get('trans',[0,0,0])
+			rot = data.get('rot',[0,0,0,1])
+			self.pose_bone(id,trans,rot)
+
+s=Skeleton()
+
+
+class Animator:
+	def __init__(self):
+		self.targets = []
+	def tick(self,dt):
+		for target in self.targets:
+			self.update(target, dt)#target don't know what data type is.
+	def add_target(self,target):
+		self.targets.append(target)
+	def update(self,target,dt):#can be redefine and bond out of class.
+		pass
+
+class Animator_skam(Animator):
+	def __init__(self):
+		super().__init__()
+		self.time = 0
+		self.data = {}#of {id:{trans:,rot:}}
+
+	def set_data(self,data):
+		self.data = data
+	def tick(self,dt):
+		self.time+=dt
+		frame = self.time//1000# 1000ms changes int++
+		pose_dict = self.data.get(frame)
+		if not pose_dict:#no frame.
+			return
+		for target in self.targets:
+			target.pose_sk(pose_dict)
+		# for ID ,data in pose_dict.items():
+		# 	trans = data.get('trans',[0,0,0])
+		# 	rot = data.get('rot',[0,0,0,1])
+		# 	target.pose_bone(ID,trans,rot)
+	#def update(self,dt):
+
+
+
+#---3rd day
+ss=Skeleton()
+
+for ID in sk:
+	bone = sk[ID]
+	name, parentID = bone
+	posedict = skam[ID]
+	trans = posedict['trans']
+	rot = posedict['rot']
+	ss.add_bone(ID,name,parentID, trans, rot)
+	#ss.add_sk(ID,name,parentID, trans, rot)
+
+print(ss)
+exit()
+
+#---3rd day, done sk, skam.
+
+#--------after 2 days.
+#animator
+#def update, knows data, what to do, target. target-specific func.
+#hopely it expends to actor animator, cam animator..fine.
+#just it's for bone, now.
+#AND tict(dt), internally update. fine.
+
+
+#===============dict cache way. quite hard to understand. deprecate.
+# abspos = {}
+# absrot = {}
+
+# def get_abs_pos(ID):
+# 	pos = abspos.get(ID)
+# 	if not pos:	
+# 		set_abs_pos(ID)
+# 		pos = abspos.get(ID)
+# 	return pos
+
+# def set_abs_pos(ID):
+# 	bone = dict[ID]
+# 	parentID = bone.parentID
+# 	if parentID:
+# 		parent_pos = get_abs_pos(parentID)
+# 		if parent_pos:
+# 			bone.pos += parent_pos
+# 	abspos[ID] = bone.pos
+
+
+
+actor = Actor()
+
+meshes = loaded['meshes']
+for i in meshes:	
+	actor.meshes.append(i)
+
+skeleton = Skeleton()
+skeleton.add_bone(id,name,parent,trans,rot)
+#skeleton.draw()no, actor only has 3d position.
+
+#=--Actor
+#draw in actor
+modelmat = actor.get_modelmat()
+for mesh in actor.meshes:
+	1
+	#mesh.draw(),actor has only 3d position.
+
+#actor.sk.draw() a skeleton may be drawn, but requires modelmat..
+
+skam = Animator_skam()
+skam.set_data(parsed_sk_dict)
+skam.add_target(sk)
+skam.tick(dt)
+
+
+#world.render
+#or world.draw() ..draw fine.. but may mixed. yeah.
+
+#world.renderer
+#renderer.render() #full gpu things..?
+
+
+"""
+world.update(dt)
+-> input, simulate, draw
+world.input_process() - via event? or stack..?
+world.simulate()
+world.draw()
+
+def draw
+world.level
+world.actor
+world.actorlist
+
+for actor in world.actors
+    actor.draw()
+-oldway.
+texture, modelmat, shader, vao..
+actor binds all to gpu, and drawcall.
+
+for actor in world.actors
+    #renderer.append(actor) #we do every time?? ..yeah. we give list of actor. ..ormesh.
+    for mesh in actor.meshes:
+    	renderer.append(mesh) #thisway, rendererrenders mesh.
+renderer.render()
+-newway, but too complex.? ..not that!
+
+renderer all draws, mesh. 3dmesh. it's fixed. fine.
+whatabout 2d gui?? or called.. hud.
+
+hud drawn before world. since world is 3dworld. fine.
+
+renderer only renders mesh?? it seems fine, since all actor is drawn. actor has mesh..
+we not allow another type of , 3dobject, which requires modelmat, means actor..
+
+yeah.
+mesh drawn.
+
+mesh and just drawn.
+mesh updated before draw phase.
+
+renderer sorts all meshs list,
+mesh has it's shader, texture, vao,
+we can sort, and draw.
+
+whatabout instanced..?
+actually instanced requires another shader, uniform value.
+
+if mesh.isinstanced:
+	parentid = mesh.instanceID
+
+
+..we did,instanced..draw...
+..rememder.. actor_instanced.draw()...
+it also automatically shaders..?
+
+..we need actor.draw() also.
+for: if instanced, draw first.
+see , actor_instanced.draw() how simple it is.
+actor has it's own shader, vao, texture,, all oneshot process.
+
+and left actor(s) drawn sorted. fine.  ..or one-each.
+
+renderer became too smaller.. just sort-draw-er.
+
+
+anyway,backto bone anim.
+
+draw draws which requires drawn.
+
+--actor.draw()
+actor.shader.bind()
+modelmat = actor.get_modelmat()
+actor.shader.set_modelmat(modelmat)
+actor.shader.set_uniform("modelmat", modelmat) #thats the form! we can keep understanding.
+
+actor.texture.bind()-old 1texture way. we cannot do this. however it's so fancy, fastest, easy to understanding.
+
+#--- also actor may store lots of vao.. mesh actually.
+actor.vao.bind()
+actor.vao.draw()
+
+so we need to draw mesh, which stores vao,texture, mat.. yeah.
+
+we need Material.
+
+and shader, there was shader for gpu.
+shader.bind()
+
+GL_shader
+GL_texture
+GL_Texture
+GLTexture
+
+shader, vao, texture
+..isit all?
+yeah.
+
+texture requires complex export, or import, or,.. 
+...means texture is texture. not much.
+
+shader, also.
+
+what if..
+sha = Shader_uvanim()
+
+sha.set_uniform('uvoffset',xxx)
+
+if shader is ..for instanced -yeah
+shader for uvanim
+shader for skam
+shader for color RGB changer! neon! ..possible.
+
+...maybe, mesh dose not calls material, shader..? no!
+even mesh has it's own mat, we override, thats why seen trans-effect kinds situation.
+
+..yeah we can expend shader, fine.
+
+
+------------------- back to skam again(2)
+
+---
+renderer:
+for mesh in meshes:
+	if mesh.isinstanced:
+		id = mesh.instanceID
+		instanced[id].append(mesh)
+NO! mesh not stores modelmat. it's clear.
+..or stores modelmat.
+
+----
+for actor in world.actors:	
+	modelmat = actor.get_modelmat()
+
+whatif, instanced actor? actor,, has a, A position. yeah.
+
+AND, if we use AXIS, .. it shall be draw by:
+actor_axis.draw()
+.fine. it shall be drawn it's own way.
+
+id = actor.instanceof
+
+#==== if axis, draw.  notvisible, not draw. isskipdraw?? too long..
+# if , instanced, we gether, and draw once. how??
+
+instanced={}
+id = actor.instanceID
+instanced[id] = actor #actgually we nmeed mesh_instanced. not actor.
+
+else:
+	renderer.append(actor)
+
+for actor in world.actors:
+	if actor.isAXIS:
+		actor.draw()
+	elif not actor.isvisible:
+		continue#skip, next!
+	elif actor.
+
+
+"""
