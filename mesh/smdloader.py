@@ -674,15 +674,17 @@ class Skeleton:
 		1#get_pos_abs
 	def __repr__(self):
 		return f"Skeleton bones: {len(self.bonedict)}"
-	def add_bone(self,ID,name,parentID, trans, rot):
+	def add_bone(self,ID,name,parentID, trans, rot, scale=[1,1,1] ):
 		"""trans [0,0,0] rot[0,0,0,1]"""
 		self.bonedict[ID] = {
 		'name':name,
 		'parent':parentID,
 		'trans':trans,
 		'rot':rot,
+		'scale':scale,
 		'trans_init':trans,
-		'rot_init':rot
+		'rot_init':rot,
+		'scale_init':scale,
 		}
 	def add_sk(self, sk_dict):
 		"""sk_dict {id:{name:,parent:,trans:,rot:}}"""
@@ -691,21 +693,25 @@ class Skeleton:
 			parent = data['parent']
 			trans = data.get('trans',[0,0,0])
 			rot = data.get('rot',[0,0,0,1])
-			self.add_bone(id, name,parent,trans,rot)
+			scale = data.get('scale',None)
+			self.add_bone(id, name,parent,trans,rot,scale)
 	def pose_reset(self):
 		for ID in self.bonedict:
 			self.bonedict['trans'] = self.bonedict['trans_init']
 			self.bonedict['rot'] = self.bonedict['rot_init']
-	def pose_bone(self,id, trans,rot):
+			self.bonedict['scale'] = self.bonedict['scale_init']
+	def pose_bone(self,id, trans,rot,scale=[1,1,1] ):
 		bone = self.bonedict.get(id)
 		if bone:
 			bone['trans'] = trans
 			bone['rot'] = rot
+			bone['scale'] = scale
 	def pose_sk(self,pose_dict):
 		for id, data in pose_dict:
 			trans = data.get('trans',[0,0,0])
 			rot = data.get('rot',[0,0,0,1])
-			self.pose_bone(id,trans,rot)
+			scale = data.get('scale',None)
+			self.pose_bone(id,trans,rot,scale)
 
 s=Skeleton()
 
