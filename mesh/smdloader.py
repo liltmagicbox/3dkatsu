@@ -5,14 +5,138 @@ import os
 from math import cos,sin
 #smdreader. now tris only. smd has:[ vertex-mtl ..]. same mtl, same vert.
 
+Mesh([0,0,0, 1,0,0, 0,1,0]) #fineest!
+Mesh(position = [0,0,0, 1,0,0, 0,1,0])
+Mesh([0,0,0, 1,0,0, 0,1,0], draw='point') #point line triangle only 3way.fine.
+Mesh([0,0,0, 1,0,0, 0,1,0, 1,1,0], [0,1,2, 1,2,3])
+Mesh([0,0,0, 1,0,0, 0,1,0, 1,1,0], indices = [0,1,2, 1,2,3])
+
+Mesh([0,0,0, 1,0,0, 0,1,0], texture = ) #by name.fine.
+Mesh([0,0,0, 1,0,0, 0,1,0], shader = )
+Mesh([0,0,0, 1,0,0, 0,1,0], material = )
+
+material = Material(shader = 'default', texture ={'diffuse_0': tex1 } )
+
+sha = Shader.load('sha.vs','sha.fs')
+sha = Shader.get('default')
+tex = Texture.get('checker')
+
+material = Material(shader = 'default', texture ={'diffuse_0': tex1 } )
+
+#better use material.
+#Mesh([0,0,0, 1,0,0, 0,1,0], texture = tex )
+#Mesh([0,0,0, 1,0,0, 0,1,0], texture = 'checker' )
+
+mat = Material( {'shader':sha, 'texture':{'diffuse_0':tex1} } )
+mat = Material(shader=, texture={'diffuse_0':tex1} )
+mat = Material( texture={'diffuse_0':tex1} )
+
+mat = Material(tex1)
+mat = Material(shader = 'default', texture = tex1)
+mat = Material(shader = 'default', texture = 'default')
+#mat.tick(dt)
+
+Mesh([0,0,0, 1,0,0, 0,1,0], material = mat)
+
+
+texture.bind()# for channel0
+texture.bind(channel =0)# for channel0 default??
+texture.bind(channel) #specific chennel. channel=int
+
+
+class Material:
+	def __init__(self, shader, texture):
+		self.shader = ''
+		self.textures = {}		
+	#def copy(self):
+	def from_json(self, jsonpath):#too complexed.
+		shadername = material_dict['shader']
+		shader = Shader.load('shadername')#fs,vs..?
+	def from_dict(self, material_dict):
+		shadername = material_dict['shader']
+		shader = Shader.get('shadername')
+		self.shader = shader		
+		textures = material_dict['texture']
+		for channel , texname in textures.items():
+			texture = Texture.get(texname)
+			self.textures[channel] = texture
+	def bind(self):
+		shader = self.shader
+		shader.bind()
+		textures = self.textures
+		for i, key in textures:
+			texture = textures[key]
+			shader.set(key,i)
+			texture.bind(i)
+
+			#diffuse, tex1
+			#specular, tex2
+			#1. loc = shader.get_loc('diffuse')
+			#2. gluint(loc, N)
+			#1,2-> shader, get loc, and returns N, assigned number.
+			
+			#3. active N
+			#4. bind(tex)
+			#3,4-> texture.bind(N)
+
+			#channel diffuse
+			#1. get location of channel
+			#2. set gl i of location
+			#3. active texture i
+			#4. bind texture id.
+
+			#N iterated
+			# loc = shader.getloc('diffuse')
+			# shader.set_uniform(loc,N)
+			# glUniformi(loc,0)
+			
+			# texchannel = texture.gltexdict[0]
+			# glActiveTexture(texchannel)
+			# texture.bind(0)
+
+			
+
+			#channelN = shader.getchannel('diffuse')#if actully from shader, yeah.
+			#texture.bind(0) #is for texture.
+
+			#texture.bind('diffuse')
+			
+	#def tick(self,dt): for mat_anim only
+		#self.time+=dt
+		#self.update()
+
+
+
+
 
 class Mesh:
 	""" python object for internal usage ..and little to glTF"""
-	def __init__(self):
+	def __init__(self, position, uv, indices, material):
 		self.attributes = {}#position normal uv
-		self.indices = None
-		self.material = None
+		self.indices = None #just list? ..or ndarray?
+		#self.material = None # {shader:, texture:{diffuse_0:} }
 		#self.name = None not native. it's too artificial.
+		# material{
+		# 'name':name,
+		# 'shader':'default',
+		# 'texture':{
+		# 'diffuse_0':texturepngname
+		# }
+		# }
+
+		attributes = {}
+		attributes['position'] = position
+		if uv:
+			attributes['uv'] = uv
+		
+		#vao
+		indexed = True
+		if not indices:
+			indexed = False
+
+		if not material:
+			material = Material.get('default')
+		self.material = material
 
 	@classmethod
 	def load_smd(cls, fdir):
@@ -26,8 +150,19 @@ class Mesh:
 	def save_obj(cls, meshes, fdir):
 		obj_save(meshes,fdir)
 	def draw(self):
-		if self.isdrawready:
-			1
+		if not self.isdrawready:
+			self.draw_ready()
+	@classmethod
+	def load_json(cls, fdir):
+		json = loadxxx
+	@classmethod
+	def from_dict(cls, mesh_dict):
+		1
+	def draw_ready(self):
+		self.shader
+		#self.texture
+		self.vao
+
 
 
 #============================================================
@@ -484,6 +619,9 @@ def skam_load(lines, pointer, END):
 
 
 def smd_load(fdir, END = 'end'):
+	return_tuple = {}
+	
+
 	path,file = split(fdir)
 	files = os.listdir(path)
 
@@ -518,10 +656,11 @@ def smd_load(fdir, END = 'end'):
 	#================parse data.
 	#--------bone
 	nodes = data_dict['nodes']
-	bones=nodes
+	return_tuple['sk'] = nodes
+	
 	#--------skam
 	skeletons = data_dict['skeleton']
-	skams = skeletons
+	return_tuple['skam'] = skeletons	
 
 	#---------------tri to mesh
 	tris = data_dict['triangles']
@@ -531,11 +670,14 @@ def smd_load(fdir, END = 'end'):
 		vertices = tri['vertices'] # is (p,x,y,z,a,b,c,u,v,link):0 tuple.
 		indices = tri['indices']
 
-		mesh = Mesh()		
-		mesh.attributes['position'] = []
-		mesh.attributes['normal'] = []
-		mesh.attributes['uv'] = []
-		mesh.attributes['weight'] = []
+		mesh={}
+		mesh['attributes']={}
+		#mesh of {attributes:{position:,normal:,uv:,bones:,weights:}, indices:[], material:{ shader:,diffuse_0:,}}
+		mesh['attributes']['position'] = []
+		mesh['attributes']['normal'] = []
+		mesh['attributes']['uv'] = []
+		mesh['attributes']['bones'] = []
+		mesh['attributes']['weights'] = []
 
 		for vtuple in vertices:
 			pbone, x,y,z, nx,ny,nz, u,v, *args = vtuple #args links, bId-w
@@ -551,44 +693,42 @@ def smd_load(fdir, END = 'end'):
 
 			#----write data to mesh.
 
-			mesh.attributes['position'].extend([x,y,z])
-			mesh.attributes['normal'].extend([nx,ny,nz])
-			mesh.attributes['uv'].extend([u,v])
+			mesh['attributes']['position'].extend([x,y,z])
+			mesh['attributes']['normal'].extend([nx,ny,nz])
+			mesh['attributes']['uv'].extend([u,v])
 
 			iters = len(args)//2
-			boneweights =[]
+			bones =[]
+			weights = []
 			for i in range(iters):
 				boneID, weight = args[0+i], args[1+i]
-				boneweights.append(boneID)
-				boneweights.append(weight)
+				bones.append(boneID)
+				weights.append(weight)
 			if iters>0:
-				mesh.attributes['weight'].extend( boneweights )
+				mesh['attributes']['bones'].extend( bones )
+				mesh['attributes']['weights'].extend( weights )
 
-		mesh.indices = indices
-
+		mesh['indices'] = indices
 
 		#virtual material. with texture..
 		texture = {}
-		texture['diffuse'] = mtl+'.png'
+		texture['diffuse_0'] = mtl+'.png'
 		#texture['diffuse'] = join(path, mtl+'.png' )
 		#texture['diffuse'] = mtl+'.png' wrap kinds. all blank now.
-
+		
 		material = {}
 		material['name'] = mtl
-		material['shader'] = 'phong'
+		material['shader'] = 'default'
 		material['texture'] = texture
-		mesh.material = material
+		mesh['material'] = material
 		
 		head, ext = splitext(file)
 		#mesh.modelname = head
 		#mesh.name = mtl #we have only this clue. ..smd assume mat.name is name..
 		#mesh.path = path
-		meshes.append(mesh)		
-
-	return_tuple = {}
-	return_tuple['sk'] = bones
-	return_tuple['skam'] = skams
+		meshes.append(mesh)
 	return_tuple['meshes'] = meshes
+	
 	return return_tuple
 
 
@@ -609,13 +749,13 @@ meshes = loaded['meshes']
 for i in meshes:
 	print(i)
 	#print(i.attributes)
-	position = i.attributes['position']
-	normal = i.attributes['normal']
-	uv = i.attributes['uv']
+	position = i['attributes']['position']
+	normal = i['attributes']['normal']
+	uv = i['attributes']['uv']
 	#print(i.attributes)
-	print(len(i.indices),'i')
+	print(len(i['indices']),'i')
 
-	print(i.material,'m')
+	print(i['material'],'m')
 
 	#print(i.)
 
