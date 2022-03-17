@@ -60,20 +60,14 @@ class VAO:
 
     def __init__(self, attrdict,indices, name='vao'):
         """we need attrdict{'position':ndarr(f32)} !"""
+        assert list(attrdict.keys())[0]=='position'
         attrlist=[]
         for attrname, nparr in attrdict.items():
             attrlist.append(nparr)
         vertices = np.concatenate( attrlist ).astype('float32')
-        
-        #---old way
-        #vertices = np.array([ [0,0,0, 0,0],  [1,0,0, 1,0],  [1,1,0, 1,1],  [0,1,0, 0,1] ]).astype('float32')
-        #indices = np.array([0,1,2,0,2,3,]).astype('uint')
-        #attr_size_dict = {0:3,1:2}
-        
-        #vert_count = len(nparr)//3#fixed way. we NEED position.
+                
         vert_count = len(indices)
 
-        #stride = sum(attr_size_dict.values())
         datatype = GL_FLOAT
         normalized = GL_FALSE #GL_TRUE
         fsize = np.float32(0.0).nbytes #to ensure namespace-safe.
@@ -89,41 +83,38 @@ class VAO:
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO)
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.nbytes, indices, GL_STATIC_DRAW)
 
+        stride = 0
         offset = ctypes.c_void_p(0)
-        for attr_index, nparr in enumerate(attrdict.values() ):            
+        attr_index=-1
+        for attrname, nparr in attrdict.items():
+            attr_index+=1
             size = len(nparr)//vert_count
-            stride = 0
             glVertexAttribPointer(attr_index, size, datatype, normalized, stride * fsize, offset)
             glEnableVertexAttribArray(attr_index)
             offset = ctypes.c_void_p( len(nparr) *fsize)
-        
-        # pre_offset = 0
-        # for attr_index, size in attr_size_dict.items():
-        #     if pre_offset==0:
-        #         offset = None
-        #         offset = ctypes.c_void_p(0)#maybe it seems works.
-        #         glVertexAttribPointer(attr_index, size, datatype, normalized, stride * fsize, offset)
-        #         glEnableVertexAttribArray(attr_index)
-        #         pre_offset = size    
-        #     else:
-        #         offset = ctypes.c_void_p( pre_offset *fsize)
-        #         glVertexAttribPointer(attr_index, size, datatype, normalized, stride * fsize, offset)
-        #         glEnableVertexAttribArray(attr_index)
-        #         pre_offset +=size
+            if attrname =='position':
+                self.pos_offset = len(nparr) #naive but we all need position right?
 
-            
         self.ID = VAO
         self.ID_VBO = VBO
         self.ID_EBO = EBO
-        #self.mode = GL_TRIANGLES some model drawn lines kind thing requires not use it.
-        self.stride = stride
-        self.points = len(indices)
-
+        self.points = vert_count
+        self.vertices = vertices
         self.name = self.__class__.set(name,self)
+
+    def update_position(self,position):
+        vertices = self.vertices
+        vertices[:self.pos_offset] = position
+        VAO = self.ID
+        VBO = self.ID_VBO
+        glBindVertexArray(VAO)
+        glBindBuffer(GL_ARRAY_BUFFER, VBO) #gpu bind VBO in VAO
+        glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_STATIC_DRAW)
+        #GL_STREAM_DRAW for little change, if you want someday..
+        self.vertices = vertices
 
     def update(self,vertices):
         """requires same shape kinds.."""
-        #assert self.points == len(vertices)//self.stride
         VAO = self.ID
         VBO = self.ID_VBO
         glBindVertexArray(VAO)
@@ -152,10 +143,14 @@ class VAO:
         glBindVertexArray(0)
         VAO.last = -1
 
-    def draw(self, MODE = GL_TRIANGLES):
+    def draw(self, MODE = 'triangles'):
         """requires bind first. it just draw command of VAO bound gpu."""
-        #simple mode changeable draw. we not prefer partial draw which is slow.
-        #glBindVertexArray(self.VAO)
+        #simple mode changeable draw. we not prefer partial draw which is slow.        
+        draw_dict = {'points':GL_POINTS,
+        'lines':GL_LINE_STRIP,
+        'triangles':GL_TRIANGLES,
+        }
+        MODE = draw_dict[MODE]
         glDrawElements(MODE, self.points, GL_UNSIGNED_INT, None)
 
 if __name__ == "__main__":
