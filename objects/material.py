@@ -37,20 +37,19 @@ class Material:
 
         #----for fast single texture material override
         #assume we use: m = Material('texname')
-        cls = self.__class__
 
         if texture:
             if isinstance(texture, Texture):
                 texture = texture.name
             name = texture
-            name = cls.set(name,self) # name->name_0 name_0->name_1
+            name = self.__class__.set(name,self) # name->name_0 name_0->name_1
             self.name = name
             self.shader = shader
             self.inputs = {"color":texture}
             return#cut here. class init return None fine.
 
 
-        name = cls.set(name,self) # name->name_0 name_0->name_1
+        name = self.__class__.set(name,self) # name->name_0 name_0->name_1
         self.name = name
 
         #shader = Shader.get(shader)
@@ -80,8 +79,8 @@ class Material:
 	    self.shader = shader		
 	    textures = material_dict['texture']
 	    for channel , texname in textures.items():
-                texture = Texture.get(texname)
-                self.textures[channel] = texture
+            texture = Texture.get(texname)
+            self.textures[channel] = texture
 
     def bind(self, M,V,P):
         """gl objects stored as name

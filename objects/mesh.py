@@ -46,7 +46,8 @@ class Mesh:
 
 		self.attributes = attributes
 		self.indices = indices
-		self.material = material
+		self.material = material#since mat is another complex object.
+		#self.material = Material.get(material)#assume we already have object.
 
 		#vao input nparr attrs{}, indices.
 		#and VAO returns name, store it and when bind, VAO.get(name).
@@ -54,7 +55,9 @@ class Mesh:
 		for key, value in attributes.items():
 			vao_attrs[key] = np.array(value).astype('float32')#assume value [] or npfloat32 already.
 		vao_indices = np.array(indices).astype('uint')
-		self.VAO = VAO(vao_attrs,vao_indices).name#not like texture,shader, it created here, when init.		
+		self.VAO = VAO(vao_attrs,vao_indices)#not like texture,shader, it created here, when init.
+		#we change to bind object, not name. seems it's more pythonic.
+		#vao is ..only parent:mesh.
 
 		self.name = self.__class__.set(name,self)
 
@@ -62,7 +65,8 @@ class Mesh:
 	def draw(self):
 		#mat = Material.get(self.material)
 		#mat.bind(m,v,p)
-		vao = VAO.get(self.VAO)
+		#vao = VAO.get(self.VAO)
+		vao = self.VAO
 		vao.bind()
 		vao.draw()
 		

@@ -113,28 +113,6 @@ class VAO:
         #GL_STREAM_DRAW for little change, if you want someday..
         self.vertices = vertices
 
-    def update(self,vertices):
-        """requires same shape kinds.."""
-        VAO = self.ID
-        VBO = self.ID_VBO
-        glBindVertexArray(VAO)
-        glBindBuffer(GL_ARRAY_BUFFER, VBO) #gpu bind VBO in VAO
-        glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_STATIC_DRAW)
-        #GL_STREAM_DRAW for little change, if you want someday..
-        self.points = len(vertices)//self.stride
-
-    def update_indices(self,vertices, indices):
-        """hope we not use this.."""
-        VAO = self.ID
-        VBO = self.ID_VBO
-        EBO = self.ID_EBO
-        glBindVertexArray(VAO)
-        glBindBuffer(GL_ARRAY_BUFFER, VBO) #gpu bind VBO in VAO
-        glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_STATIC_DRAW)
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO)
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.nbytes, indices, GL_STATIC_DRAW)
-        self.points = len(indices)#now we can really change it..
-
     def bind(self):
         if VAO.last != self.ID:
             glBindVertexArray(self.ID)
