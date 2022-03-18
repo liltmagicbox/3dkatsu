@@ -34,8 +34,7 @@ class Mesh:
 	def __repr__(self):
 		return f"mesh name:{self.name}, mat:{self.material}"
 	def __init__(self, position, indices=None, material='default', name='mesh', **kwargs):		
-		cls = self.__class__
-
+		
 		attributes = {}#position normal uv.. position only has priority		
 		attributes['position'] = position
 		for key, value in kwargs.items():
@@ -57,13 +56,12 @@ class Mesh:
 		vao_indices = np.array(indices).astype('uint')
 		self.VAO = VAO(vao_attrs,vao_indices).name#not like texture,shader, it created here, when init.		
 
-		name = cls.set(name,self)
-		self.name = name
+		self.name = self.__class__.set(name,self)
 
 	def bind(self):1
 	def draw(self):
 		#mat = Material.get(self.material)
-		#mat.bind(m,v,p)		
+		#mat.bind(m,v,p)
 		vao = VAO.get(self.VAO)
 		vao.bind()
 		vao.draw()

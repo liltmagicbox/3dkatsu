@@ -1684,6 +1684,8 @@ texture4 =  Texture.byimg('texture2.jpg')
 from mesh import Mesh
 #maha = Mesh([0,0,0, 1,0,0, 0,1,0, 1,0,0, 0,1,0,1,1,0] )
 maha = Mesh(position =[0,0,0, 1,0,0, 0,1,0] , uv=[0,0, 1,0, 0,1])
+#from vao import VAO
+#VAO.get(maha.VAO).update_position([0,0,0, 1.5,0,0, 0,1,0])
 
 @window.event
 def on_draw():
