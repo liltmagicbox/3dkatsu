@@ -99,8 +99,14 @@ class Window:
         glfwTerminate()#This function destroys all remaining windows and cursors, 
 
 
-
-
+class Inputmanager:
+    def __init__(self):
+        1
+    def input(self, events):
+        for i in events:
+            print(i)
+    def bind(self, window):
+        window.input = self.input
 
 def main():
     w = Window('w1')
@@ -111,8 +117,14 @@ def main():
         for e in events:
             if e['key']==256:#we need class not dict.
                 w.close()
+
     #w.input = lambda y:print(y)
-    w.input = custom_input_function
+    #w.input = custom_input_function
+
+    i = Inputmanager()
+    #w.input = i.input
+    i.bind(w)#thats the way!
+
 
     #r = Renderer()
     #r.render(world)
