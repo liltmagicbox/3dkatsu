@@ -1,5 +1,5 @@
 #import glfw
-#from glfw.GLFW import *# we not use this.
+from glfw.GLFW import *# we not use this.. but too ..bad.
 import glfw
 
 def see_dirs():
@@ -10,6 +10,29 @@ def see_dirs():
     #from glfw.GLFW import glfwGetTime
     #print(help(glfw.get_time))
     #print(help(glfwGetTime))
+
+#https://webnautes.tistory.com/1103
+def errorCallback(errcode, errdesc):
+    print(errcode, errdesc)
+glfwSetErrorCallback(errorCallback)
+
+#===============glfw minimum requirements.
+#====on setup
+#glfw.init()
+#(window settings)
+window = glfw.create_window(640, 480, 'new window', None, None)
+glfw.make_context_current(window)#we gl, we write to here.
+#(event callback)
+#====on_draw
+# glClearColor(0, 0, 0, 1)
+# glClear(GL_COLOR_BUFFER_BIT)
+# glfw.swap_buffers(window)
+# glfw.poll_events()
+#====return ram
+#glfwTerminate()
+#===============glfw minimum requirements.
+
+
 
 #https://www.glfw.org/docs/3.3/group__init.html#ga110fd1d3f0412822b4f1908c026f724a
 #but seems only joystick hat..
@@ -22,6 +45,8 @@ def see_dirs():
 if not glfw.init():#need thread safe, run by mainthread.
     raise Exception('glfw init error')
 
+from PIL import Image
+
 class Window:
     """single window design."""
     def __init__(self, windowname = 'a window'):
@@ -30,9 +55,29 @@ class Window:
         #glfwWindowHintString
         #glfwDefaultWindowHints
 
-        print(glfw.VERSION_MAJOR)
-        print(glfw.VERSION_MINOR)
-        print(glfw.VERSION_REVISION)
+        
+
+        #____high: whatever 4.6.0.
+        #glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4)
+        #glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1)
+        #glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 4)
+        #glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
+        #glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE)#compat works vert attr0
+        #glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
+
+        #______for low: 3.1 only! thats good!
+        #3.0 no 3.1 yeah
+        # glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
+        # glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 1)
+        # glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, False)
+        # glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_ANY_PROFILE)
+
+
+        #===================================
+        #not useful
+        #print(glfw.VERSION_MAJOR)
+        #print(glfw.VERSION_MINOR)
+        #print(glfw.VERSION_REVISION)
         #https://learnopengl.com/Getting-started/Hello-Window
         #https://www.glfw.org/docs/3.3/window_guide.html
         #https://kyoungwhankim.github.io/ko/blog/opengl_window/
@@ -52,42 +97,115 @@ class Window:
         
         #glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2)
         #'Context profiles are only defined for OpenGL version 3.2 and above'
-        glfw.window_hint(glfw.RESIZABLE,glfw.FALSE)
-        glfw.window_hint(glfw.FLOATING, glfw.TRUE)
-        glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, glfw.TRUE)
-        #glfwWindowHint(GLFW_CENTER_CURSOR , GLFW_TRUE)
-        #glfwWindowHint(GLFW_DECORATED , GLFW_FALSE)#cool!
-        
-        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 2)
-        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 1)
-        glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, False)
-        glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_ANY_PROFILE)
-        #glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
-        #glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
 
-        monitor1 = glfw.get_primary_monitor()
-        monitor1 = None
-        window = glfw.create_window(640, 480, windowname, monitor1, None)
-        #https://www.glfw.org/docs/3.3/window_guide.html
-        print(glfw.get_error())
+
+        #glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+        #CORE: bury deprecated / COMPAT: compatibility / ANY: <=3.2
+
+        #glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
+        #bury deprecated. 3.0<=
+
         print(glfw.get_version())
         s = glfw.get_version_string()
         print(s)
         print(glDrawArraysIndirect )
+
         #print(glGetString(GL_VERSION))
 
 
+
+        #glfw.window_hint(glfw.RESIZABLE,glfw.FALSE)
+        glfw.window_hint(glfw.FLOATING, glfw.TRUE)
+        glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, glfw.TRUE)
+        #glfwWindowHint(GLFW_CENTER_CURSOR , GLFW_TRUE)
+        #glfwWindowHint(GLFW_DECORATED , GLFW_FALSE)#cool! no frame!
+
+
+        #MSAA works fine. with this.
+        glfw.window_hint(glfw.SAMPLES,4)
+        #glEnable(GL_MULTISAMPLE)
+
+
+        #opacity
+        #seems not that need..? works fine with shader 1,0,0,0
+        #glfwWindowHint ( GLFW_TRANSPARENT_FRAMEBUFFER , GLFW_TRUE )
+
+
+        monitor1 = glfw.get_primary_monitor()#for full screen
+        monitor1 = None
+        window = glfw.create_window(640, 480, windowname, monitor1, None)
+            
         
 
+        #https://www.glfw.org/docs/3.3/window_guide.html
+        print(glfw.get_error())     
+
+
+        a = glfwGetWindowContentScale(window)
+        #print(a)(1.0, 1.0) seems x,y content-pixel ratio fine.
+        glfwSetWindowAspectRatio (window, 16, 9)
+        glfwSetWindowSizeLimits(window, 200, 200, GLFW_DONT_CARE, GLFW_DONT_CARE)
+        
+        #https://www.glfw.org/docs/3.3/group__window.html#gadd7ccd39fe7a7d1f0904666ae5932dc5
+        glfwGetWindowPos(window)
+        glfwGetWindowSize(window)
+        glfwSetWindowPos (window, 100, 100)
+        #glfwSetWindowPosCallback (window, window_pos_callback)
+        #def window_pos_callback(window, xpos, ypos)
+        
+        glfwSetWindowTitle(window, "라스트에그자일" )
+        #best 16x16, 32x32 및 48x48입니다. ..donno why 2nd img is.
+        ii = [Image.open('m.png'), Image.open('boxtexture.png')]
+        glfwSetWindowIcon(window, 2, ii)
+        
+        #glfwSetWindowOpacity(window,1)
+        glfwGetFramebufferSize(window)
+        o = glfwGetWindowOpacity(window)
+        #print(o)
+        #exit(0)
+        #glfwMaximizeWindow(window)
+        #glfwIconifyWindow(window)
+        glfwHideWindow(window)
+        glfwFocusWindow(window)#destructive.
+        glfwShowWindow(window)
+
+        glfwRequestWindowAttention(window)#blink.wow.
+        #glfwGetWindowAttrib.. not that. i like .ini , not in-game menu.
+        #atleast we can full_screen.. with monitor set.
+        #print(glfwGetWindowMonitor(window))<glfw.LP__GLFWmonitor object at 0x00000250FFE71F40>
+        print(glfwGetWindowAttrib(window, GLFW_TRANSPARENT_FRAMEBUFFER))#default 1.
+
+
         if not window:
+            glfwTerminate()
             raise Exception('no window created!')
+        
         glfw.make_context_current(window)
-        print(bool(glDrawArraysIndirect) )
+        #this.. context.. holds STATE.
+
+        print(bool(glDrawArraysIndirect) )#gpu sayas 3.1 but still True.ok..
         # tell GLFW to capture our mouse
         #glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED)
         #glEnable(GL_DEPTH_TEST)
         #glClearColor(0.1, 0.1, 0.1, 1.0)
         #glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        a = glGetString(GL_SHADING_LANGUAGE_VERSION) #b'4.60 NVIDIA'        
+        a = glGetString(GL_VERSION)#b'4.6.0 NVIDIA 456.71'
+        print(a)
+
+
+
+        #glfwWaitEventsTimeout(10)
+        #wait till 10s.good.
+        #seems joystick no need event (but i think can occured.)
+        #https://www.glfw.org/docs/3.3/window_guide.html
+        #see more.detail.
+        #glfwSwapInterval(1)
+
+
+        glfwSwapInterval(1)#0 too fast, tearing. 1 is mx 60fps kinds.        
+        #0 or not this is ..no vsync.
 
         self.window = window
         self.events=[]
@@ -199,8 +317,8 @@ in vec3 ocolor;
 out vec4 FragColor;
 void main()
 {
-    FragColor = vec4(1,1,0,1);
-    //FragColor = vec4(0,0,0,0);
+    //FragColor = vec4(1,0,1,1);
+    FragColor = vec4(0,0,0,0);
 }
 """
 def shasha():
@@ -227,7 +345,7 @@ class Vbo:
         self.VBO = VBO
     def draw(self):
         glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
-        glDrawArrays(GL_POINTS, 0,3)
+        glDrawArrays(GL_TRIANGLES, 0,3)
 
 class Vao:
     def __init__(self, pos, color=None):
@@ -271,7 +389,7 @@ class Vao:
         self.points = len(indices)
     def draw(self):        
         glBindVertexArray(self.VAO)
-        glDrawElements(GL_POINTS, 3, GL_UNSIGNED_INT, None)
+        glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, None)
 
 
 
@@ -289,6 +407,11 @@ class Inputmanager:
             if '256' in str(i):
                 if self.window:
                     self.window.close()
+            if i['key']==49:
+                a = glGetString(GL_VERSION)#b'4.6.0 NVIDIA 456.71'
+                print(a)
+                time.sleep(1)
+                #exit()
             print(i)
     def bind(self, window):
         """let the window bound"""
@@ -338,20 +461,25 @@ class Renderer:
         """real draw. set MVP.."""
         for i in self.targets:
             i.draw()
-        print('i rendered')
+        #print('i rendered')
     def bind(self, window):
         """window runs and calls this"""
         window.draw = self.draw
 
 
 
+#input or key or general?
+# class Event:
+#     def __init__(self):
+#         self.name = 
+#         self.type = 
+#         self.key
+
+import time
 
 
 
-
-
-
-
+{'type': 'key_unpressed', 'key': 49}
 def main():
     w = Window('w1')
     
@@ -360,6 +488,7 @@ def main():
         for e in events:
             if e['key']==256:#we need class not dict.
                 w.close()
+            
     #w.input = lambda y:print(y)
     #w.input = custom_input_function
 
