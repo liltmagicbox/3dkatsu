@@ -1,5 +1,6 @@
 #import glfw
-from glfw.GLFW import *
+#from glfw.GLFW import *# we not use this.
+import glfw
 
 def see_dirs():
     a = dir(glfw)
@@ -15,8 +16,10 @@ def see_dirs():
 #glfwInitHint(GLFW_VERSION_MAJOR, 4)
 #glfwInitHint(GLFW_VERSION_MINOR, 2)
 
+#glfw.VERSION_MAJOR = 4
+#glfw.VERSION_MINOR = 6
 # Initialize the library
-if not glfwInit():#need thread safe, run by mainthread.
+if not glfw.init():#need thread safe, run by mainthread.
     raise Exception('glfw init error')
 
 class Window:
@@ -27,17 +30,19 @@ class Window:
         #glfwWindowHintString
         #glfwDefaultWindowHints
 
-        print(GLFW_VERSION_MAJOR)
-        print(GLFW_VERSION_MINOR)
-        print(GLFW_VERSION_REVISION)
+        print(glfw.VERSION_MAJOR)
+        print(glfw.VERSION_MINOR)
+        print(glfw.VERSION_REVISION)
         #https://learnopengl.com/Getting-started/Hello-Window
         #https://www.glfw.org/docs/3.3/window_guide.html
         #https://kyoungwhankim.github.io/ko/blog/opengl_window/
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4)
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3)
+        
+        #glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3)
+        #glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3)
+        #glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE)#compat works.
+        
         #glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE)        
         #glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE)#compat works.
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE)#compat works.
         #https://stackoverflow.com/questions/58022707/glvertexattribpointer-raise-gl-invalid-operation-version-330
         #Since you use a core profile ... the default Vertex Array Object 0 is not valid
         #i see.. compatibility,, 0 is automatically set.
@@ -47,27 +52,37 @@ class Window:
         
         #glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2)
         #'Context profiles are only defined for OpenGL version 3.2 and above'
-        print(GLFW_CONTEXT_VERSION_MAJOR)
-        glfwWindowHint(GLFW_RESIZABLE,GLFW_FALSE)
-        glfwWindowHint(GLFW_FLOATING, GLFW_TRUE)
-        glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE)
+        glfw.window_hint(glfw.RESIZABLE,glfw.FALSE)
+        glfw.window_hint(glfw.FLOATING, glfw.TRUE)
+        glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, glfw.TRUE)
         #glfwWindowHint(GLFW_CENTER_CURSOR , GLFW_TRUE)
         #glfwWindowHint(GLFW_DECORATED , GLFW_FALSE)#cool!
         
-        monitor1 = glfwGetPrimaryMonitor()
+        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 2)
+        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 1)
+        glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, False)
+        glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_ANY_PROFILE)
+        #glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
+        #glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+
+        monitor1 = glfw.get_primary_monitor()
         monitor1 = None
-        window = glfwCreateWindow(640, 480, windowname, monitor1, None)
+        window = glfw.create_window(640, 480, windowname, monitor1, None)
         #https://www.glfw.org/docs/3.3/window_guide.html
-        print(glfwGetError())
-        print(glfwGetVersion())
-        s = glfwGetVersionString()
+        print(glfw.get_error())
+        print(glfw.get_version())
+        s = glfw.get_version_string()
         print(s)
+        print(glDrawArraysIndirect )
+        #print(glGetString(GL_VERSION))
+
 
         
 
         if not window:
             raise Exception('no window created!')
-        glfwMakeContextCurrent(window)
+        glfw.make_context_current(window)
+        print(bool(glDrawArraysIndirect) )
         # tell GLFW to capture our mouse
         #glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED)
         #glEnable(GL_DEPTH_TEST)
@@ -80,14 +95,14 @@ class Window:
         self.bind_input()
     def set_time(self, time=120):
         #just sets internal time. for test..?
-        glfwSetTime(time)
+        glfw.set_time(time)
     def close(self):
         window = self.window
-        glfwSetWindowShouldClose(window,True)
+        glfw.set_window_should_close(window,True)
         #glfwDestroyWindow
     def set_current(self):
         window = self.window
-        glfwMakeContextCurrent(window)
+        glfw.make_context_current(window)
     def bind_input(self):
         #events = self.events not this. this becomes new object. use self.events directly.
 
@@ -120,8 +135,8 @@ class Window:
 
         #step 2. actual bind.
         window = self.window
-        glfwSetKeyCallback(window, key_callback)
-        glfwSetDropCallback(window, drop_callback)
+        glfw.set_key_callback(window, key_callback)
+        glfw.set_drop_callback(window, drop_callback)
 
     def input(self, events):
         1#print(events)
@@ -132,7 +147,7 @@ class Window:
     def run(self):
         window = self.window
         timewas = 0
-        while not glfwWindowShouldClose(window):
+        while not glfw.window_should_close(window):
             #input, update(ai,physics), draw 3-type.
             #---1 input
             self.input(self.events)
@@ -140,7 +155,7 @@ class Window:
 
             #---2 update
             #t = glfw.get_timer_value()#20540838386 2054 is seconds.
-            t = glfwGetTime()
+            t = glfw.get_time()
             dt = t-timewas
             self.update(dt)
             
@@ -149,10 +164,10 @@ class Window:
             glClear(GL_COLOR_BUFFER_BIT)
             self.draw()#[]=empty world
             # Swap front and back buffers
-            glfwSwapBuffers(window)
-            glfwPollEvents()#this , is the input! but to next time!
+            glfw.swap_buffers(window)
+            glfw.poll_events()#this , is the input! but to next time!
 
-        glfwTerminate()#This function destroys all remaining windows and cursors, 
+        glfw.terminate()#This function destroys all remaining windows and cursors, 
 
 
 
