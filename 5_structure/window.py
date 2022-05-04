@@ -52,14 +52,14 @@ from PIL import Image
 
 
 class Window:
-    main = True
-    windows = []#holding created window.
-    current = None
+    _main = True
+    _windows = []#holding created window.
+    _current = None
     """single window design."""
     def __init__(self, windowname = 'a window', gles31=False, contextwindow = None):
-        main = self.__class__.main
-        if main:self.__class__.main = False
-        self.__class__.windows.append(self)
+        main = self.__class__._main
+        if main:self.__class__._main = False
+        self.__class__._windows.append(self)
 
         if main:
             if not glfwInit():#ready gl, load to ram
@@ -106,21 +106,21 @@ class Window:
         glEnable(GL_DEPTH_TEST)
 
 
-        #self.__class__.windows.append(self)#for multiwindow draw. remember to delete.NO!
+        #self.__class__._windows.append(self)#for multiwindow draw. remember to delete.NO!
         #not since .. if window_shooting kinds happens... never happens and main window owes.
-        self.__class__.current = self#since we did avobe. this is the right way.
+        self.__class__._current = self#since we did avobe. this is the right way.
         self.name = NAME.set(self)
         self.UUID = UUID.set(self)
         self.window = window #str repr of callback broken.
-        self.main = main
-
+        self._main = main#see @property.
+        
         self._events = []
         self._update_funcs = []
         self._draw_funcs = []
 
         self.skip_ratio = 2.0#for sub-window, if 2.0, skip 2*60 frames.(main 60hz)
         if main:self.skip_ratio=0
-        self.fps = 60
+        self._dt = 1/60#this is more natural. not fps.
         self.event_halt_time = 0
         self.skipped_frame = 0#not in renderer
         
@@ -130,9 +130,9 @@ class Window:
     def destroy(self):
         """common self destoryer. attrs."""
         UUID.delete(self.UUID)
-        #print(self.__class__.windows,'before')
-        self.__class__.windows.remove(self)
-        #print(self.__class__.windows,'AFTER')
+        #print(self.__class__._windows,'before')
+        self.__class__._windows.remove(self)
+        #print(self.__class__._windows,'AFTER')
         self.window = None#this is the checker..or not. this brings error.
 
     def close(self):
@@ -151,10 +151,34 @@ class Window:
             glfwSwapInterval(1)#0<0.001ms, 1:16ms,2:33ms, 10:5frame/s ..tearing(0)?
         else:
             glfwSwapInterval(0)
-    def set_fps(self, fps):
-        """set target fps. waits at self.run """
+    
+    #=======this implements read-only.
+    @property
+    def main(self):
+        return self._main
+    @main.setter
+    def main(self,main):
+        1#not allow to set it.
+    #=======this implements read-only.
+
+    def _xxxset_fps(self, fps):
+        """breaks vsync. waits at self.run """
         self.fps = fps
         self.set_vsync(False)
+    @property
+    def fps(self):#0.001= 1ms
+        return int(1/self._dt)
+    @property
+    def dt(self):
+        return self._dt
+    @dt.setter
+    def dt(self,dt):
+        1#self._dt = dt
+    @fps.setter
+    def fps(self, fps):
+        self._dt = 1/fps
+        self.set_vsync(False)
+    #===fps set, not set dt. since dt 16ms or 0.016s.
 
     def pos(self, pos=None):
         window = self.window
@@ -301,10 +325,10 @@ class Window:
     def _bind(self):
         #currentwin = glfwGetCurrentContext()print(currentwin == self.window,'wwww') course not
         #https://stackoverflow.com/questions/45309537/glfw-one-context-for-all-windows
-        if not self.__class__.current == self:
+        if not self.__class__._current == self:
             glfwMakeContextCurrent(self.window)
-            #print(self.__class__.current.name, self.__class__.current,'========>>>>>>',self.name,self)
-            self.__class__.current = self
+            #print(self.__class__._current.name, self.__class__._current,'========>>>>>>',self.name,self)
+            self.__class__._current = self
     def clear(self):#gl_ for requires contextcurrent. ..not_gl even bind() in it..
         """bind needed. glclearcolor,clearbuffer. change if not of those."""
         # if self.window==None:
@@ -352,7 +376,7 @@ class Window:
     #==========================
     def _draw_main(self):
         """shall NOT be replaced by renderer."""
-        for window in self.__class__.windows:
+        for window in self.__class__._windows:
             if not window._draw_check():
                 continue
             if window._threshold_check():
@@ -437,13 +461,13 @@ class Window:
             
             #---3 draw
             #self.draw()
-            #for win in self.__class__.windows:#seems still best way..
+            #for win in self.__class__._windows:#seems still best way..
             #not use: if class Window_advanced(Window).
             self._draw_main()#will be replaced to renderer.render
             render_time, t = timespent(t)
 
             #time.sleep seems ~20ms ..20!
-            target_dt = 1/self.fps
+            target_dt = self.dt
             timetook = input_time + update_time + render_time
             tinytime = target_dt - timetook
 
@@ -531,59 +555,6 @@ class Renderer:
         window.draw_push(draw_func)
 
 
-
-class old_Renderer:
-    def __init__(self):
-        1
-    #def __init__(self, main_window):
-        #if not main_window.main:
-        #    log.Exception('it should be main(1st) window')
-        #self.window = main_window
-        #main_window.draw_main = self._draw
-        #log.log('renderer replaced window.draw',main_window.name)
-        #self.windows = []#uuid since its too ..id. inter-class rule.
-        #since it's not dict, we can directly store window. ..py can key class.
-    
-    #def render(self, world_or_actors_or_target, camera=None, window = None, pos_aabb=None):
-    def render(self, window, target, camera=None):
-        """add render target
-        all inputs become draw-ready objects."""
-
-        #world,maybe just 1 simulated,.. if you can multi world, but dt takes time.. -did
-        #cam that sees world
-        #window that draws from camera.
-        
-        if hasattr(target, 'maincam'):
-            camera = target.camera[0]
-        if camera == None:#we can have many,many camera. hahaha!
-            camera = 1#Camera()
-
-        #if isinstance(target, World): not this strict way.
-        if isinstance(target, World):#shall world not import window. it's fine.
-            for i in target.actors:
-                self.targets = []
-
-        if isinstance(target, list):
-            vao = Vbo(target)
-            self.targets = [vao]
-        
-        def draw_func():
-            #here set MVP.
-            1
-        window.draw_push(draw_func)
-        self.windows.append(window.UUID)#should we add by uuid..? if so, we will see again.
-        #we did. inter-class rule for collapsable(most everything)
-    
-    def xxx_draw(self):
-        1
-        """partial draw call. set MVP.  / window internally bind,claer,swaps."""
-        # for uuid in self.windows:
-        #     print(window,'www')
-        #     window = UUID.get(uuid)
-        #     if window:
-        #         window.draw()
-        #     else:
-        #         self.windows.remove(uuid)#better than pop-idx.
 
 #input or key or general?
 # class Event:
@@ -736,7 +707,32 @@ if __name__ == "__main__":
     w.update_pop(ttt)
 
     #renderer = Renderer(w)
-    #w.set_fps(60)
+    w.fps=90
+    #not w.set_fps(90). yeah.
+    
+    #time.sleep 0.0001 became 15ms kinds. while 0.0 is 1ns.
+    for i in range(3):
+        t = timef()
+        time.sleep(0.0)
+        print(timef()-t,'need 0.001')
+    #w.update_push(timec)
+
+    #window.fps set but dt. but dt not allows set.
+    print(w.fps, w.dt)
+    w.fps = 30
+    print(w.fps, w.dt)
+    w.dt = 16.666#not working. since 16ms or 0.016 problem.
+    print(w.fps, w.dt)    
+
+    #window.main read-only
+    print(w.main)
+    w.main = False
+    print(w.main)
+    w.main = True
+    w.main = 55
+    print(w.main)
+    exit()
+
     w.run()
 
     X = []
