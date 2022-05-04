@@ -53,10 +53,13 @@ from PIL import Image
 
 class Window:
     main = True
+    windows = []#holding created window.
+    current = None
     """single window design."""
-    def __init__(self, windowname = 'a window', gles31=False):
+    def __init__(self, windowname = 'a window', gles31=False, contextwindow = None):
         main = self.__class__.main
         if main:self.__class__.main = False
+        self.__class__.windows.append(self)
 
         if main:
             if not glfwInit():#ready gl, load to ram
@@ -80,9 +83,9 @@ class Window:
         glfwWindowHint(GLFW_FLOATING, True)
         glfwWindowHint(GLFW_RESIZABLE, 1)
         
+        #glfwWindowHint(GLFW_SAMPLES,4)#msaa
         #glfwWindowHint(GLFW_DECORATED, False)
         #glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, True)#opacity works shader 1,0,0,0
-        #glfwWindowHint(GLFW_SAMPLES,4)#msaa
         
         #https://www.glfw.org/docs/3.3/window_guide.html
         #glfwGetError()
@@ -92,7 +95,7 @@ class Window:
 
         monitor1 = glfwGetPrimaryMonitor()#for full screen
         monitor1 = None
-        window = glfwCreateWindow(640, 480, windowname, None, None)
+        window = glfwCreateWindow(640, 480, windowname, None, contextwindow)
         if window==None:
             log.Exception('no window error')
             return
@@ -104,32 +107,43 @@ class Window:
 
 
         #self.__class__.windows.append(self)#for multiwindow draw. remember to delete.NO!
-        #not since .. if window_shooting kinds happens.
+        #not since .. if window_shooting kinds happens... never happens and main window owes.
+        self.__class__.current = self#since we did avobe. this is the right way.
         self.name = NAME.set(self)
         self.UUID = UUID.set(self)
         self.window = window #str repr of callback broken.
         self.main = main
 
-        self.events = []
-        self.update_funcs = []
-        self.draw_funcs = []
+        self._events = []
+        self._update_funcs = []
+        self._draw_funcs = []
 
         self.skip_ratio = 2.0#for sub-window, if 2.0, skip 2*60 frames.(main 60hz)
         if main:self.skip_ratio=0
         self.fps = 60
         self.event_halt_time = 0
         self.skipped_frame = 0#not in renderer
-        self.current = False#for safe. if for context, ofcourse.
+        
+        #self.current = False#for safe. if for context, ofcourse.
         self.cookie = 0#just clicker. update, little time( 0.6ms kinds not for time.sleep)
+
+    def destroy(self):
+        """common self destoryer. attrs."""
+        UUID.delete(self.UUID)
+        #print(self.__class__.windows,'before')
+        self.__class__.windows.remove(self)
+        #print(self.__class__.windows,'AFTER')
+        self.window = None#this is the checker..or not. this brings error.
 
     def close(self):
         window = self.window
         if self.main:
-            glfwSetWindowShouldClose(window,True)#in run. destroy all by..
+            glfwSetWindowShouldClose(window,True)#in run. destroy all by..            
         else:
-            glfwDestroyWindow(window)
-            UUID.delete(self.UUID)
-        self.window = None#this is the checker..or not.
+            #glfwSetWindowShouldClose(window,True)
+            glfwDestroyWindow(window)#error occurs next draw code.
+        self.destroy()
+        
 
     def set_vsync(self, set = True):
         """limit fps(powersave)by monitor. if slow draw, skips next loop."""
@@ -171,41 +185,6 @@ class Window:
         monitor = glfwGetMonitors()[0]#shall we save window.monitor?
         glfwSetGamma(monitor, value)
 
-    def bind_callback(self):
-        window = self.window
-        #https://www.glfw.org/docs/3.3/group__window.html#gadd7ccd39fe7a7d1f0904666ae5932dc5
-        def window_pos_callback(window, xpos, ypos):
-            print(xpos,ypos)            
-            #xx = glfwGetFramebufferSize(window)
-            #glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-            #basically when window changes, fbuffer changed.
-            #content scale ratio of current DPI / platform's default DPI.
-        def key_callback(window, key, scancode, action, mods):
-            #if (key == GLFW_KEY_ESCAPE and action == GLFW_PRESS):
-            #    glfwSetWindowShouldClose(window,True)
-            #print(key, scancode, action, mods)
-            #action 0=unp 1=pressed 2pressing
-            if action==1:
-                event = {'type':'key_pressed','key':key}
-            elif action==2:
-                event = {'type':'key_pressing','key':key}
-            elif action==0:
-                event = {'type':'key_unpressed','key':key}
-            self.events.append(event)
-        
-        def drop_callback(path_count, paths):#bury path_count. 
-            #paths ['C:\\Users\\liltm\\Desktop\\vvv.png', 'C:\\Users\\liltm\\Desktop\\ff.png']
-            for path in paths:
-                #event = Event.filedrop(path)#or Event(type='filedrop',path)
-                event = f"filedrop {path}"
-                self.events.append(event)#..not inputs good name..
-            
-        #step 2. actual bind.
-        window = self.window
-        glfwSetWindowPosCallback(window, window_pos_callback)
-        glfwSetKeyCallback(window, key_callback)
-        glfwSetDropCallback(window, drop_callback)
-
     def cursor_pos(self, pos=None):
         if pos:
             x,y=pos
@@ -217,9 +196,9 @@ class Window:
         window = self.window
         #glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN)#just hidden mouse over
         if lock:
-            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL)
-        else:
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED)
+        else:
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL)
         #bind mmove callback if c enabled.?
 
     def set_icon(self, fdir=None):#hope we from data not from fdir..
@@ -249,7 +228,64 @@ class Window:
         glfwFocusWindow(window)#destructive.
 
 
-    
+    def bind_callback(self):
+        window = self.window
+        #https://www.glfw.org/docs/3.3/group__window.html#gadd7ccd39fe7a7d1f0904666ae5932dc5
+        def window_pos_callback(window, xpos, ypos):
+            print(xpos,ypos)            
+            #xx = glfwGetFramebufferSize(window)
+            #glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+            #basically when window changes, fbuffer changed.
+            #content scale ratio of current DPI / platform's default DPI.
+        def key_callback(window, key, scancode, action, mods):
+            if (key == GLFW_KEY_ESCAPE and action == GLFW_PRESS):
+                self.close()
+               #glfwSetWindowShouldClose(window,True)
+            #print(key, scancode, action, mods)
+            #action 0=unp 1=pressed 2pressing
+            if (key == GLFW_KEY_A and action == GLFW_PRESS):
+                self.cursor_lock()
+            if (key == GLFW_KEY_B and action == GLFW_PRESS):
+                self.cursor_lock(False)
+            if (key == GLFW_KEY_W and action == GLFW_PRESS):
+                #w2=Window(contextwindow = self.window)#hard to know what main is.
+                w2=Window()
+                w2.bind_callback()
+
+            if (key == GLFW_KEY_D and action == GLFW_PRESS):
+                def xx():
+                    glBegin(GL_TRIANGLES)
+                    verts = [
+                    [-0.5,0,0],
+                    [0.5,0,0],
+                    [0,0.5,0],
+                    ]
+                    for vert in verts:
+                        glVertex3fv(vert)
+                    ts.append(timef())
+                    glEnd()
+                self.draw_push(xx)
+            if action==1:
+                event = {'type':'key_pressed','key':key}
+            elif action==2:
+                event = {'type':'key_pressing','key':key}
+            elif action==0:
+                event = {'type':'key_unpressed','key':key}
+            self._events.append(event)
+        
+        def drop_callback(path_count, paths):#bury path_count. 
+            #paths ['C:\\Users\\liltm\\Desktop\\vvv.png', 'C:\\Users\\liltm\\Desktop\\ff.png']
+            for path in paths:
+                #event = Event.filedrop(path)#or Event(type='filedrop',path)
+                event = f"filedrop {path}"
+                self._events.append(event)#..not inputs good name..
+            
+        #step 2. actual bind.
+        window = self.window
+        glfwSetWindowPosCallback(window, window_pos_callback)
+        glfwSetKeyCallback(window, key_callback)
+        glfwSetDropCallback(window, drop_callback)
+
     #============below need context current. gl operations.
     def get_glversion(self):
         a = glGetString(GL_VERSION)#b'4.6.0 NVIDIA 456.71'
@@ -261,62 +297,87 @@ class Window:
         monitors = glfwGetMonitors()#)[<glfw.LP__GLFWmonitor object at 0x00000228D5740140>]
         monitor = monitors[0]
         glfwGetMonitorName(monitor)#)b'Generic PnP Monitor'
-    def bind(self):
-        if not self.current:
+    
+    def _bind(self):
+        #currentwin = glfwGetCurrentContext()print(currentwin == self.window,'wwww') course not
+        #https://stackoverflow.com/questions/45309537/glfw-one-context-for-all-windows
+        if not self.__class__.current == self:
             glfwMakeContextCurrent(self.window)
-            self.current = True        
+            #print(self.__class__.current.name, self.__class__.current,'========>>>>>>',self.name,self)
+            self.__class__.current = self
     def clear(self):#gl_ for requires contextcurrent. ..not_gl even bind() in it..
-        """bind needed. change if not of those."""
+        """bind needed. glclearcolor,clearbuffer. change if not of those."""
+        # if self.window==None:
+        #     print('hhhhhhhhhhhh')
+        # if glfwWindowShouldClose(self.window):
+        #     print('hahaoijergajioweragiojgerawioj')
+        # print(self.window)
+        # glfwMakeContextCurrent(self.window)
         glClearColor(0, 0, 0, 1)#hope all same color.
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         #whatif stensil buffer? window knows what to do.
-    def swap(self):
+    def _swap(self):
         """not technically but near claer"""
         glfwSwapBuffers(self.window)#Swap front and back buffers#4e-5 0.00004 of empty.
 
     #=====================================
-    def input(self, events):
+    def _input(self, _events):
         1#print(events)
-    def update(self, dt):
-        for func in self.update_funcs:#now world2
+    def _update(self, dt):
+        for func in self._update_funcs:#now world2
             func(dt)
-    def draw_main(self):
-        """shall be replaced by renderer."""
-        self.draw()
-    def draw(self):
-        """actual draw call"""
-        #1M, loop.. actions adds 12ms to 20ms.  8 actions, 1k: 20us~100us
-        if not self.skip_ratio==0:#for visual seperation. 0 still works.
-            self.skipped_frame += 1
-            threshold = self.fps * self.skip_ratio#60*2.0=120 frames
-            energy = self.skipped_frame #119not 121 y4eah
-            if energy < threshold:
-                return
-            else:
-                self.skipped_frame=0
-        #----------------
-        self.bind()
+    def _draw(self):
+        """actual draw call of an window"""
+        self._bind()#simple, one bind, one draw. we don't need to check context..
         self.clear()
-        for func in self.draw_funcs:
+        for func in self._draw_funcs:
             func()
-        self.swap()
+        self._swap()    
     #=====================================
     def update_push(self, func):
         """maybe its easy to def new draw..containing all. thats what was for."""
-        self.update_funcs.append(func)
+        self._update_funcs.append(func)
     def update_pop(self, func):
         """not that returns. just remove."""
-        if func in self.update_funcs:
-            self.update_funcs.remove(func)
-            #idx = self.update_funcs.index(func)
-            #self.update_funcs.pop(idx)
+        if func in self._update_funcs:
+            self._update_funcs.remove(func)
+            #idx = self._update_funcs.index(func)
+            #self._update_funcs.pop(idx)
     def draw_push(self, func):
         """maybe its easy to def new draw..containing all. thats what was for."""
-        self.draw_funcs.append(func)
+        self._draw_funcs.append(func)        
     def draw_pop(self, func):
-        if func in self.draw_funcs:
-            self.draw_funcs.remove(func)
-
+        if func in self._draw_funcs:
+            self._draw_funcs.remove(func)
+    #==========================
+    def _draw_main(self):
+        """shall NOT be replaced by renderer."""
+        for window in self.__class__.windows:
+            if not window._draw_check():
+                continue
+            if window._threshold_check():
+                window._draw()
+    def _draw_check(self):
+        if glfwWindowShouldClose(self.window):
+            print('bbbbbbbbbbbbb')
+            self.window.close()
+        if self.window == None:
+            print('draw check False=================\nFalse=================')
+            return False
+        return True
+    def _threshold_check(self):
+        #1M, loop.. actions adds 12ms to 20ms.  8 actions, 1k: 20us~100us
+        if self.skip_ratio==0:#for visual seperation. 0 still works.
+            return True
+        else:
+            self.skipped_frame += 1
+            threshold = self.fps * self.skip_ratio#60*2.0=120 frames
+            energy = self.skipped_frame #119not 121 y4eah
+            if energy >= threshold:
+                self.skipped_frame=0
+                return True
+            else:
+                return False
     #============
     def run(self):
         if not self.main:
@@ -331,7 +392,8 @@ class Window:
         timer = []
         render_time = 0.001
         timewas = timef()
-        while not glfwWindowShouldClose(self.window):
+        #while not glfwWindowShouldClose(self.window):
+        while not self.window==None:#this prevents destroyed window run.
             #t = glfw.get_timer_value()#20540838386 2054 is seconds.
             #t = glfwGetTime()#0.000001 both seems accuracy  1/1000 of 1ms.
             #we use more accurate time.perf_counter()
@@ -346,12 +408,12 @@ class Window:
             else:glfwWaitEventsTimeout(self.event_halt_time)
             #else wait till Xseconds. it blocks mainloop.
 
-            self.input(self.events)
-            self.events = []
+            self._input(self._events)
+            self._events = []
             input_time, t = timespent(t)
 
             #---2 update
-            self.update(dt)
+            self._update(dt)
             update_time, t = timespent(t)
 
             # #case: render over dt
@@ -377,7 +439,7 @@ class Window:
             #self.draw()
             #for win in self.__class__.windows:#seems still best way..
             #not use: if class Window_advanced(Window).
-            self.draw_main()#will be replaced to renderer.render
+            self._draw_main()#will be replaced to renderer.render
             render_time, t = timespent(t)
 
             #time.sleep seems ~20ms ..20!
@@ -441,14 +503,45 @@ class World:
     def bind(self, window):
         window.update = self.update
 
+
+
+
 class Renderer:
-    def __init__(self, main_window):
-        if not main_window.main:
-            log.Exception('it should be main(1st) window')        
-        self.window = main_window
-        main_window.draw_main = self._draw
-        log.log('renderer replaced window.draw',main_window.name)
-        self.windows = []#uuid since its too ..id. inter-class rule.
+    def __init__(self):
+        1
+    def render(self, window, target, camera=None, posaabb=None):
+        """add render target all inputs become draw-ready objects. and draw_push of window"""
+        if hasattr(target, 'maincam'):
+            camera = target.camera[0]
+        if camera == None:#we can have many,many camera. hahaha!
+            camera = 1#Camera()
+
+        #if isinstance(target, World): not this strict way.
+        if isinstance(target, World):#shall world not import window. it's fine.
+            for i in target.actors:
+                self.targets = []
+
+        if isinstance(target, list):
+            vao = Vbo(target)
+            self.targets = [vao]
+        
+        def draw_func():
+            #here set MVP.
+            1
+        window.draw_push(draw_func)
+
+
+
+class old_Renderer:
+    def __init__(self):
+        1
+    #def __init__(self, main_window):
+        #if not main_window.main:
+        #    log.Exception('it should be main(1st) window')
+        #self.window = main_window
+        #main_window.draw_main = self._draw
+        #log.log('renderer replaced window.draw',main_window.name)
+        #self.windows = []#uuid since its too ..id. inter-class rule.
         #since it's not dict, we can directly store window. ..py can key class.
     
     #def render(self, world_or_actors_or_target, camera=None, window = None, pos_aabb=None):
@@ -481,15 +574,16 @@ class Renderer:
         self.windows.append(window.UUID)#should we add by uuid..? if so, we will see again.
         #we did. inter-class rule for collapsable(most everything)
     
-    def _draw(self):
+    def xxx_draw(self):
+        1
         """partial draw call. set MVP.  / window internally bind,claer,swaps."""
-        for uuid in self.windows:
-            print(window,'www')
-            window = UUID.get(uuid)
-            if window:
-                window.draw()
-            else:
-                self.windows.remove(uuid)#better than pop-idx.
+        # for uuid in self.windows:
+        #     print(window,'www')
+        #     window = UUID.get(uuid)
+        #     if window:
+        #         window.draw()
+        #     else:
+        #         self.windows.remove(uuid)#better than pop-idx.
 
 #input or key or general?
 # class Event:
@@ -626,7 +720,7 @@ if __name__ == "__main__":
         verts = [
         [-1,0,0],
         [0.5,0,0],
-        [0,0.5,0],
+        [0,0.8,0],
         ]
         for vert in verts:
             glVertex3fv(vert)
@@ -642,7 +736,7 @@ if __name__ == "__main__":
     w.update_pop(ttt)
 
     #renderer = Renderer(w)
-    
+    #w.set_fps(60)
     w.run()
 
     X = []
