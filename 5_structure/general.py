@@ -118,7 +118,7 @@ def get_tstr():
 class Logger:
     def __init__(self,print=False):
         self.logs=[]
-        self.print = print
+        self.print_log = print
     def log(self, *text):
         """general log"""
         head = 'LOG'
@@ -144,12 +144,20 @@ class Logger:
         self.add(head,text)
     def err(self,*text):
         self.error(text)
+    def print(self, *text):
+        head = 'print'
+        print(text)#whatever
+        self.add(head,text)
 
     #_-for compatibility
 
     def add(self, head,body):
+        strbody = ''
         if isinstance(body,list) or isinstance(body,tuple):
-            body = ' '.join(body)
+            #body = ' '.join(body)
+            for strs in body:
+                strbody += strs
+        body = strbody
 
         head = (head+':').ljust(10)
         body = body.ljust(40)#'xx'.rjust(5,'3')
@@ -157,7 +165,7 @@ class Logger:
 
         text = f"{head} {body} --{tstr}"
         self.logs.append(text)
-        if self.print:print(text)    
+        if self.print_log:print(text)    
 
     def __repr__(self):
         return '\n'.join(self.logs)

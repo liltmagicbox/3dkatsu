@@ -1,3 +1,14 @@
 gles31: false
-glfwWindowHint: {}
-name: a window
+
+glfwWindowHint:
+  GLFW_CENTER_CURSOR: 1
+  GLFW_DECORATED: true
+  GLFW_FLOATING: true
+  GLFW_RESIZABLE: true
+  
+  #GLFW_SAMPLES: 4
+  #GLFW_DECORATED: false
+
+glEnable:
+  - GL_MULTISAMPLE
+  - GL_DEPTH_TEST

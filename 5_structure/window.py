@@ -32,16 +32,16 @@ glfwSetErrorCallback(errorCallback)
 #glfwTerminate()
 #===============glfw minimum requirements.
         
-dd = {
-'name':'a window',
-'gles31':False,
+# dd = {
+# 'name':'a window',
+# 'gles31':False,
 
-'glfwWindowHint':{
+# 'glfwWindowHint':{
     
-}
-     }
+# }
+#      }
 
-YAML.save(dd,'window.yml')
+# YAML.save(dd,'window.yml')
 
 from PIL import Image
 
@@ -56,7 +56,7 @@ class Window:
     _windows = []#holding created window.
     _current = None
     """single window design."""
-    def __init__(self, windowname = 'a window', gles31=False, contextwindow = None):
+    def __init__(self, windowname = 'a window', gles31=False):
         main = self.__class__._main
         if main:self.__class__._main = False
         self.__class__._windows.append(self)
@@ -64,11 +64,39 @@ class Window:
         if main:
             if not glfwInit():#ready gl, load to ram
                 log.Exception('glfw init error')
+        #=====================
+        width = 640
+        height = 480
+
+        vsync = True
+        fps = 60#or we get window hz?
+
+        msaa = False
+        depth_buffer = True
+        full_screen = False
+
+        gles31 = False
+        always_top = False
+        resizable = True
+        #=====================
+        dd = YAML.load('window.yml')
+        #windowname = dd['name']
+        gles31 = dd['gles31']
+        print(dd)
+
+        def glfw_WindowHints():
+            glfw_dict = dd['glfwWindowHint']
+            for key,value in glfw_dict.items():
+                target = globals()[key]
+                glfwWindowHint(target,value)
+
+        def gl_Enables():
+            gl_list = dd['glEnable']
+            for attr in gl_list:
+                glattr = globals()[attr]
+                glEnable(glattr)
             
-            dd = YAML.load('window.yml')
-            windowname = dd['name']
-            gles31 = dd['gles31']
-        
+
         #defualt gl max version. print(glfw.get_version_string())
         if gles31:#for low version 3.1 only
             glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3)
@@ -76,12 +104,14 @@ class Window:
             glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, False)
             glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE)
         
+        glfw_WindowHints()
+
         #but replace  or glFinish.
         #------hits before create window.
         #glfwWindowHint(GLFW_DOUBLEBUFFER, False)#True/glfwSwapBuffers if vsync. else False/glFlush
-        glfwWindowHint(GLFW_CENTER_CURSOR , True)#find GLFW_CURSOR_DISABLED
-        glfwWindowHint(GLFW_FLOATING, True)
-        glfwWindowHint(GLFW_RESIZABLE, 1)
+        #glfwWindowHint(GLFW_CENTER_CURSOR , True)#find GLFW_CURSOR_DISABLED
+        #glfwWindowHint(GLFW_FLOATING, always_top)
+        #glfwWindowHint(GLFW_RESIZABLE, resizable)
         
         #glfwWindowHint(GLFW_SAMPLES,4)#msaa
         #glfwWindowHint(GLFW_DECORATED, False)
@@ -90,21 +120,44 @@ class Window:
         #https://www.glfw.org/docs/3.3/window_guide.html
         #glfwGetError()
 
-        #-gl functions not glfw
+        #-gl functions not glfw        
+        #glGetString(GL_VERSION)#b'4.6.0 NVIDIA 456.71'
+        #glGetString(GL_SHADING_LANGUAGE_VERSION) #b'4.60 NVIDIA'
 
-
+        #print(glfwGetWindowMonitor(window))<glfw.LP__GLFWmonitor object at 0x00000250FFE71F40>
+        #print(glfwGetWindowAttrib(window, GLFW_TRANSPARENT_FRAMEBUFFER))#default 1.
+        
+        #https://www.glfw.org/docs/3.3/monitor_guide.html#monitor_event
+        #glfwGetMonitors()[0]
         monitor1 = glfwGetPrimaryMonitor()#for full screen
-        monitor1 = None
-        window = glfwCreateWindow(640, 480, windowname, None, contextwindow)
+        #m_name = glfwGetMonitorName(monitor1)
+        #glfw.get_video_modes(monitor1)
+        #GLFWvidmode(size=Size(width=720, height=480), bits=Bits(red=8, green=8, blue=8), refresh_rate=60)
+        #GLFWvidmode(size=Size(width=1920, height=1080), bits=Bits(red=8, green=8, blue=8), refresh_rate=75)
+        mode = glfwGetVideoMode(monitor1)
+        m_width,m_height = mode.size
+        fps = mode.refresh_rate
+
+        if not full_screen:
+            monitor1 = None
+
+        window = glfwCreateWindow(width, height, windowname, monitor1, None)
         if window==None:
             log.Exception('no window error')
             return
 
         glfwMakeContextCurrent(window)#this.. context.. grabs gl STATE.
         #after gl settings. hopely after we only need in draw.. else we need make current.
-        glEnable(GL_MULTISAMPLE)#default was True.
-        glEnable(GL_DEPTH_TEST)
+        gl_Enables()
+        # if msaa:
+        #     glEnable(GL_MULTISAMPLE)#default was True.
+        # if depth_buffer:
+        #     glEnable(GL_DEPTH_TEST)
 
+        #====================gl glfw settings.
+        self._vsync = vsync
+        self._dt = 1/fps#this is more natural. not fps.
+        #====================gl glfw settings.
 
         #self.__class__._windows.append(self)#for multiwindow draw. remember to delete.NO!
         #not since .. if window_shooting kinds happens... never happens and main window owes.
@@ -120,12 +173,11 @@ class Window:
 
         self.skip_ratio = 2.0#for sub-window, if 2.0, skip 2*60 frames.(main 60hz)
         if main:self.skip_ratio=0
-        self._dt = 1/60#this is more natural. not fps.
+
         self.event_halt_time = 0
         self.skipped_frame = 0#not in renderer
-        
+        self.wait_times = 0
         #self.current = False#for safe. if for context, ofcourse.
-        self.cookie = 0#just clicker. update, little time( 0.6ms kinds not for time.sleep)
 
     def destroy(self):
         """common self destoryer. attrs."""
@@ -144,14 +196,18 @@ class Window:
             glfwDestroyWindow(window)#error occurs next draw code.
         self.destroy()
         
-
-    def set_vsync(self, set = True):
+    @property
+    def vsync(self):
+        return self._vsync
+    @vsync.setter
+    def vsync(self,vsync):
         """limit fps(powersave)by monitor. if slow draw, skips next loop."""
-        if set:
+        if vsync:
             glfwSwapInterval(1)#0<0.001ms, 1:16ms,2:33ms, 10:5frame/s ..tearing(0)?
         else:
             glfwSwapInterval(0)
-    
+        self._vsync = vsync
+
     #=======this implements read-only.
     @property
     def main(self):
@@ -160,24 +216,33 @@ class Window:
     def main(self,main):
         1#not allow to set it.
     #=======this implements read-only.
-
     def _xxxset_fps(self, fps):
         """breaks vsync. waits at self.run """
         self.fps = fps
-        self.set_vsync(False)
+        self.vsync = False
     @property
     def fps(self):#0.001= 1ms
         return int(1/self._dt)
+    @fps.setter
+    def fps(self, fps):
+        self._dt = 1/fps
+        self.vsync = False
+    @property
+    def dt(self):
+        return self._dt
+    @dt.setter
+    def dt(self,dt):
+        if dt>1:
+            1#dt 0.016(s), not 16(ms).
+        else:
+            self._dt = dt
+
     @property
     def dt(self):
         return self._dt
     @dt.setter
     def dt(self,dt):
         1#self._dt = dt
-    @fps.setter
-    def fps(self, fps):
-        self._dt = 1/fps
-        self.set_vsync(False)
     #===fps set, not set dt. since dt 16ms or 0.016s.
 
     def pos(self, pos=None):
@@ -310,18 +375,7 @@ class Window:
         glfwSetKeyCallback(window, key_callback)
         glfwSetDropCallback(window, drop_callback)
 
-    #============below need context current. gl operations.
-    def get_glversion(self):
-        a = glGetString(GL_VERSION)#b'4.6.0 NVIDIA 456.71'
-        b = glGetString(GL_SHADING_LANGUAGE_VERSION) #b'4.60 NVIDIA'
-        return a,b
-    def get_monitor(self):
-        #print(glfwGetWindowMonitor(window))<glfw.LP__GLFWmonitor object at 0x00000250FFE71F40>
-        #print(glfwGetWindowAttrib(window, GLFW_TRANSPARENT_FRAMEBUFFER))#default 1.
-        monitors = glfwGetMonitors()#)[<glfw.LP__GLFWmonitor object at 0x00000228D5740140>]
-        monitor = monitors[0]
-        glfwGetMonitorName(monitor)#)b'Generic PnP Monitor'
-    
+    #============below need context current. gl operations.    
     def _bind(self):
         #currentwin = glfwGetCurrentContext()print(currentwin == self.window,'wwww') course not
         #https://stackoverflow.com/questions/45309537/glfw-one-context-for-all-windows
@@ -382,11 +436,10 @@ class Window:
             if window._threshold_check():
                 window._draw()
     def _draw_check(self):
+        """this hopely happens when: some, really critical time."""
         if glfwWindowShouldClose(self.window):
-            print('bbbbbbbbbbbbb')
-            self.window.close()
-        if self.window == None:
-            print('draw check False=================\nFalse=================')
+            self.close()
+        if self.window == None:            
             return False
         return True
     def _threshold_check(self):
@@ -413,9 +466,9 @@ class Window:
             spent = nt -t
             return spent, nt
 
-        timer = []
-        render_time = 0.001
+        run_begin = timef()
         timewas = timef()
+        glfwSwapInterval(1)
         #while not glfwWindowShouldClose(self.window):
         while not self.window==None:#this prevents destroyed window run.
             #t = glfw.get_timer_value()#20540838386 2054 is seconds.
@@ -466,14 +519,21 @@ class Window:
             self._draw_main()#will be replaced to renderer.render
             render_time, t = timespent(t)
 
-            #time.sleep seems ~20ms ..20!
+            #time.sleep seems ~20ms ..20! minimum 14ms at windows10.!
             target_dt = self.dt
-            timetook = input_time + update_time + render_time
-            tinytime = target_dt - timetook
+            time_spent = input_time + update_time + render_time
+            halt_time = target_dt - time_spent
+            #print(render_time)
 
-            # hangout = timef()
-            # while timef()-hangout<tinytime:
-            #     1
+            #wait_s = timef()
+            # wait_time=0
+            # while timef()-wait_s < halt_time:
+            #     wait_time = (timef()-wait_s)#/self.fps
+            # self.wait_times += wait_time
+
+            #print(wait_time)
+            #print(update_time, render_time, wait_time, '       took times')
+            #print(timef()-t)
 
 
             #timer.append(render_time)
@@ -482,11 +542,12 @@ class Window:
             #something to check time.
             #times = timef()-st
             #timer.append(times)
-
         glfwTerminate()#This function destroys all remaining windows and cursors,
 
+        run_time = timef()-run_begin
+
         p = Plotter()
-        p.plot(timer)
+        #p.plot(timer)
         #p.show()
         #p.save('pp.jpg')
         #print(timer)
@@ -699,48 +760,5 @@ if __name__ == "__main__":
         glEnd()
     w.draw_push(drawf)
 
-
-    def ttt(dt):
-        #print(dt)
-        print(1/dt)
-    w.update_push(ttt)
-    w.update_pop(ttt)
-
-    #renderer = Renderer(w)
-    w.fps=90
-    #not w.set_fps(90). yeah.
-    
-    #time.sleep 0.0001 became 15ms kinds. while 0.0 is 1ns.
-    for i in range(3):
-        t = timef()
-        time.sleep(0.0)
-        print(timef()-t,'need 0.001')
-    #w.update_push(timec)
-
-    #window.fps set but dt. but dt not allows set.
-    print(w.fps, w.dt)
-    w.fps = 30
-    print(w.fps, w.dt)
-    w.dt = 16.666#not working. since 16ms or 0.016 problem.
-    print(w.fps, w.dt)    
-
-    #window.main read-only
-    print(w.main)
-    w.main = False
-    print(w.main)
-    w.main = True
-    w.main = 55
-    print(w.main)
-    exit()
-
+    #w.fps=60
     w.run()
-
-    X = []
-    ii = ts[0]
-    for i in ts:
-        dt = i-ii
-        ii = i
-        X.append(dt)
-    pp=Plotter()
-    pp.plot(X)
-    #pp.show()
