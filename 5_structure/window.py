@@ -184,7 +184,7 @@ class Window:
     def close(self):
         """set flag. window shall be deleted in loop start."""
         glfwSetWindowShouldClose(self.window,True)
-    def close_check(self):
+    def should_close(self):
         """check after loop"""
         return glfwWindowShouldClose(self.window)
     def destroy(self):
@@ -202,19 +202,20 @@ class Window:
             glfwMakeContextCurrent(window)
     def current(self):self.glbind()
 
-    def bind_callback(self, inputmanager):
+    def bind_callback(self):
         window = self.window
         #https://www.glfw.org/docs/3.3/group__input.html
         #joystick requires polling. no callback!
-        glfwSetErrorCallback(inputmanager.error_callback)#instead glfwGetError()
-        glfwSetKeyCallback(window, inputmanager.key_callback)
-        glfwSetMouseButtonCallback(window, inputmanager.mouse_callback)
-        glfwSetCursorPosCallback(window, inputmanager.cursor_callback)
-        glfwSetScrollCallback(window, inputmanager.scroll_callback)
-        glfwSetCursorEnterCallback(window, inputmanager.cursor_enter_callback)
-        glfwSetDropCallback(window, inputmanager.drop_callback)
-        glfwSetFramebufferSizeCallback(window, inputmanager.fb_size_callback)
-        glfwSetWindowPosCallback(window, inputmanager.pos_callback)
+        glfwSetErrorCallback(error_callback)#instead glfwGetError()        
+        glfwSetCharCallback(window, char_callback)
+        glfwSetKeyCallback(window, key_callback)
+        glfwSetMouseButtonCallback(window, mouse_button_callback)
+        glfwSetCursorPosCallback(window, cursor_pos_callback)
+        glfwSetScrollCallback(window, scroll_callback)
+        glfwSetCursorEnterCallback(window, cursor_enter_callback)
+        glfwSetDropCallback(window, drop_callback)
+        glfwSetFramebufferSizeCallback(window, fb_size_callback)
+        glfwSetWindowPosCallback(window, window_pos_callback)
 
     #==============================
     #real window operations.
@@ -327,7 +328,7 @@ class Window:
     @x.setter
     def x(self,x):
         height = glfwGetWindowPos(self.window)[1]
-        glfwSetWindowPos(self.window, x,height)
+        glfwSetWindowPos(self.window, x,height)#no callback
     @property
     def y(self):
         return glfwGetWindowPos(self.window)[1]
@@ -587,57 +588,75 @@ class Window:
 
 
 
+# inputmanager.error_callback
+# inputmanager.key_callback
+# inputmanager.mouse_button_callback
+# inputmanager.cursor_pos_callback
+# inputmanager.scroll_callback
+# inputmanager.cursor_enter_callback
+# inputmanager.drop_callback
+# inputmanager.fb_size_callback
+# inputmanager.window_pos_callback
 
+#from glfw_keydict import keydict
 
+fdir = 'glfw_keydict.yaml'
+key_dict = YAML.load(fdir)
 
+#letters U+1100-U+11FF
+#fullpack U+AC00-U+D800
+#0xD800 = 55296 #AND 3130(12592) to 12687!(0x318F)
 
+def error_callback(error_code, description):
+    log.error(error_code, description)
 
+def char_callback(window, codepoint):    
+    if (0x3130<= codepoint <= 0x318F)or\
+    (0x1100<= codepoint <= 0x11FF) or\
+    (0xAC00<= codepoint <= 0xD7A3):
+        #uni = '\u'+str(codepoint)
+        uni = chr(codepoint)
+        print(uni)
+    else:
+        uni = chr(codepoint)
+        print(uni)
+        #print(codepoint,'hak')        
 
+def key_callback(window, key, scancode, action, mods):   
+    print(key,scancode)
+    num = key_dict.get(key)
+    #print(num)
+    #print(num,scancode,key)
+    if num == 'ESCAPE':
+        w.close()
 
+    GLFW_PRESS
+    GLFW_REPEAT
+    GLFW_RELEASE
+
+    #name = glfwGetKeyName(key,scancode)
+    #print(name)
+    #GLFW_PRESS = 1 #2 pressing 0 unp
+
+def mouse_button_callback(window, button, action, mods):
+    print(button)
+def cursor_pos_callback(window, xpos,ypos):
+    1#print(xpos,ypos)
+def scroll_callback(window, xoffset, yoffset):
+    print(yoffset)
+
+def cursor_enter_callback(window, state):
+    print(state)
+def drop_callback(window, path_count, paths):#bury path_count. 
+    #paths ['C:\\Users\\liltm\\Desktop\\vvv.png', 'C:\\Users\\liltm\\Desktop\\ff.png']
+    for path in paths:
+        1
+        #event = Event.filedrop(path)#or Event(type='filedrop',path)                
+
+def window_pos_callback(window, xpos, ypos):#not from win.x+=5
+    print(xpos,ypos)
 def fb_size_callback(window, width, height):
     glViewport(0, 0, width, height)
-
-
-
-
-#https://www.glfw.org/docs/3.3/group__window.html#gadd7ccd39fe7a7d1f0904666ae5932dc5
-        # def window_pos_callback(window, xpos, ypos):
-        #     print(xpos,ypos)            
-        #     #xx = glfwGetFramebufferSize(window)
-        #     #glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-        #     #basically when window changes, fbuffer changed.
-        #     #content scale ratio of current DPI / platform's default DPI.
-        
-        # def key_callback(window, key, scancode, action, mods):
-        #     #print(key, scancode, action, mods)
-        #     #event = Event_key()
-        #     if (key == GLFW_KEY_ESCAPE and action == GLFW_PRESS):
-        #         self.close()
-        #     #action 0=unp 1=pressed 2pressing
-        #     if (key == GLFW_KEY_A and action == GLFW_PRESS):
-        #         self.cursor_lock()
-        #     if action==1:
-        #         event = {'type':'key_pressed','key':key}
-        #     elif action==2:
-        #         event = {'type':'key_pressing','key':key}
-        #     elif action==0:
-        #         event = {'type':'key_unpressed','key':key}
-        #     self._events.append(event)
-        
-        # def drop_callback(path_count, paths):#bury path_count. 
-        #     #paths ['C:\\Users\\liltm\\Desktop\\vvv.png', 'C:\\Users\\liltm\\Desktop\\ff.png']
-        #     for path in paths:
-        #         #event = Event.filedrop(path)#or Event(type='filedrop',path)
-        #         event = f"filedrop {path}"
-        #         self._events.append(event)#..not inputs good name..
-            
-        # #step 2. actual bind.
-        # window = self.window
-
-        # def seterror_callback(error_code, description):
-        #     log.error(error_code, description)
-        
-
 
 
 
@@ -670,6 +689,9 @@ class Inputmanager:
         """let the window bound"""
         self.window = window
         window.input = self.input
+    def key_callback(self):1
+
+
 
 class World:
     def __init__(self):
@@ -938,7 +960,11 @@ if __name__ == "__main__":
         w.x+=10
         #w.cursor_posx+=5
     #time.sleep(2)
-    
+    w.bind_callback()
+    while not w.should_close():
+        time.sleep(0.001)
+        glfwPollEvents()
+
     
 #====================================================================
 #====================================================================
