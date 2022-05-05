@@ -20,7 +20,7 @@ class Uuid:
             self.dict.pop(key)
 
 class Name:
-    """use NAME=Name()
+    """name by class. use NAME=Name()
     maxN. but when _2max, del _2 new is _2 not _3."""
     def __init__(self):
         self.dict = {}# key clsname.
@@ -29,7 +29,7 @@ class Name:
         return self.dict[clsname].get(key)
     def set(self,item):
         SELFDICT = self.dict
-        clsname = item.__class__.__name__#.lower()
+        clsname = item.__class__.__name__.lower()
         if not clsname in SELFDICT:
             SELFDICT[clsname] = {}        
         key = clsname+'_0'
@@ -40,6 +40,10 @@ class Name:
 
         self.dict[clsname][key] = item
         return key
+    def delete(self,key):
+        clsname, _ = key.split('_')
+        if key in self.dict[clsname]:
+            self.dict.pop(key)
 
 
 from matplotlib import pyplot as plt
