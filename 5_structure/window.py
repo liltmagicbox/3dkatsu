@@ -2,6 +2,13 @@
 from glfw.GLFW import *
 from OpenGL.GL import *
 
+from general import Logger, YAML, timef, Plotter, Uuid,Name
+NAME = Name()
+UUID = Uuid()
+log = Logger(print=True)
+
+
+
 import os
 from PIL import Image
 
@@ -25,77 +32,11 @@ def set_icon(window, fdir=None):#32 jpg default all.fine.
     img = Image.open(fdir)
     glfwSetWindowIcon(window, 1, img)
 
-from general import Logger, YAML, timef, Plotter, Uuid,Name
-NAME = Name()
-UUID = Uuid()
-
-log = Logger(print=True)
-
-#===============glfw minimum requirements.
-#(event callback) seems anywhere.
-#====on setup
-#glfw.init()
-#glfwWindowHint#before window
-#window = glfw.create_window(640, 480, 'new window', None, None)
-#glfw.make_context_current(window)#we gl, we write to here.
-#glEnable#after context(window)
-#====on draw
-# glClearColor(0, 0, 0, 1)
-# glClear(GL_COLOR_BUFFER_BIT)
-# glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)#if glEnable(GL_DEPTH_TEST)
-# glfw.swap_buffers(window)
-# glfw.poll_events()
-#====after run, return ram
-#glfwTerminate()
-#===============glfw minimum requirements.
 
 
-#============================gl else
-#glfwSetTime(time)
-#glfwGetFramebufferSize(window)#need callback?
-#glfwGetWindowAttrib.. not that. i like .ini , not in-game menu.
-#print(glfw.get_version_string())
-#glGetString(GL_VERSION)#b'4.6.0 NVIDIA 456.71'
-#glGetString(GL_SHADING_LANGUAGE_VERSION) #b'4.60 NVIDIA'
+#============================================
+#============================================
 
-#glfw.get_video_modes(monitor1)
-#GLFWvidmode(size=Size(width=720, height=480), bits=Bits(red=8, green=8, blue=8), refresh_rate=60)
-#GLFWvidmode(size=Size(width=1920, height=1080), bits=Bits(red=8, green=8, blue=8), refresh_rate=75)
-
-#about depth testing:
-#glEnable(GL_DEPTH_TEST)#test, discard fragment.
-#glDepthMask(GL_FALSE)#tmp stops write to depth buffer.
-#glDepthFunc(GL_LESS)#GL_ALWAYS
-#https://learnopengl.com/Advanced-OpenGL/Depth-testing
-
-
-
-#@vsync.setter
-# def vsync(self,vsync):
-#     """limit fps(powersave)by monitor. if slow draw, skips next loop."""
-#     if vsync:
-#         glfwSwapInterval(1)#0<0.001ms, 1:16ms,2:33ms, 10:5frame/s ..tearing(0)?
-#     else:
-#         glfwSwapInterval(0)
-#     self._vsync = vsync
-
-#=======this implements read-only.
-    # @property
-    # def main(self):
-    #     return self._main
-    # @main.setter
-    # def main(self,main):
-    #     1#not allow to set it.
-
-#============this is fixed settings. not changeable runtime.
-
-# ifyouwant_setting_saveload_by_dict_glfw_hint_namedict = {
-# 'transparent_fbuffer' : GLFW_TRANSPARENT_FRAMEBUFFER
-# 'always_on_top' : GLFW_FLOATING
-# 'resizable' : GLFW_RESIZABLE
-# 'samples' : GLFW_SAMPLES
-# 'decorated' : GLFW_DECORATED
-# }
 
 default_window_setting_dict={
 'ifgles31shader':"#version 300 es \nprecision highp float;",
@@ -132,6 +73,14 @@ default_window_setting_dict={
     'GL_LINE_SMOOTH',
     ],
 
+'xxfunc':[
+    'glfw_fullscreen',
+    ],
+'attrs':{
+    'dt':1/60,
+    'init_size':[640,480],#init_size: !!python/tuple
+    }
+
 }
 
 def load_window_settings(fdir):
@@ -143,17 +92,18 @@ def load_window_settings(fdir):
     #gles31 = dd['gles31']
     return dd
 
-def glfw_WindowHints(glfw_dict):
-    for key,value in glfw_dict.items():
-        #target = glfw_hint_namedict[key]
-        target = globals()[key]                
-        glfwWindowHint(target, int(value) )
 
 #https://www.glfw.org/docs/3.3/window_guide.html
 #glfwWindowHint(GLFW_DOUBLEBUFFER, False)#True/glfwSwapBuffers if vsync. else False/glFlush
 #glfwWindowHint(GLFW_SAMPLES,4)#msaa
 #glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, True)#opacity works shader 1,0,0,0
 #print(glfwGetWindowAttrib(window, GLFW_TRANSPARENT_FRAMEBUFFER))#default 1.
+
+def glfw_WindowHints(glfw_dict):
+    for key,value in glfw_dict.items():
+        #target = glfw_hint_namedict[key]
+        target = globals()[key]                
+        glfwWindowHint(target, int(value) )
 
 def gl_Enables(gl_list):
     for attr in gl_list:
@@ -164,32 +114,13 @@ def gl_Disables(gl_list):
         glattr = globals()[attr]
         glDisable(glattr)
 
-#glfwSetWindowAttrib
-#see not that useful.
-GLFW_DECORATED
-GLFW_RESIZABLE
-GLFW_FLOATING
-GLFW_AUTO_ICONIFY
-GLFW_FOCUS_ON_SHOW
-#glfwSetWindowShouldClose.
-#glfwSetWindowCloseCallback
 
-def set_monitor(self, idx):
-    #https://www.glfw.org/docs/3.3/monitor_guide.html#monitor_event
-    #monitor1 = glfwGetPrimaryMonitor()#for full screen
-    #monitors = glfwGetMonitors()
-    #monitor = monitors[idx]
-    #mode = glfwGetVideoMode(monitor)
-    #m_width,m_height = mode.size
-    #fps = mode.refresh_rate
-    #something window pos change..?
-    1
 
-#little ram but fine. window 1st, renderer 2nd.
 #if not glfwInit():#ready gl, load to ram
 #    log.Exception('glfw init error')
 glfwInit()
-
+#here, insures it ran mainthread.(while import)
+#little ram but fine. window 1st, renderer 2nd.
 
 class Window:
     def __init__(self, yml_fdir = 'window_setting.yml'):
@@ -216,10 +147,12 @@ class Window:
         gl_Enables(window_setting_dict.get('glEnable',[]) )
         gl_Disables(window_setting_dict.get('glDisable',[]) )
         
+        #=====settings remain
         glfwSwapInterval(0)#not to vsync. for ensure.
         set_icon(window, icon_fdir)
+        glfwSetWindowSizeLimits(window, 100, 100, GLFW_DONT_CARE, GLFW_DONT_CARE)
 
-        #====setting python class attrs
+        #====setting python class attr
         #self.name = NAME.set('window',self)#more rigid.
         self.name = NAME.set(self)
         self.UUID = UUID.set(self)
@@ -230,24 +163,24 @@ class Window:
         #===intenal values
         self.skip_ratio = 0.0#if 2.0, skip 2*60 frames.(main 60hz)
         self.skip_counter = 0
-        #self.event_halt_time = 0#become too complex.
 
         #====propertys.
         #==int/floats
-        self.dt = 1/60 #this is more natural. not fps.
-        #self.fps = 60 #@property
+        attrs_dict = window_setting_dict['attrs']
+        self.dt = attrs_dict.get('dt',1/60)
+        self.init_size = attrs_dict.get('init_size',(720,480))
+        self.size = self.init_size
+        #this is more natural. self.fps = 60 #@property
         
-        #we dont need to store this. value is outside. @property dir() search-able!
-        #self.size = (640,480)#this contains ratio also!
-        #self.pos = (160,120)
-        #self.width = 640
-        #self.height = 480
-        
+        #we dont need to store width,height. value is outside.
+        #@property dir()
+        #self.size = (640,480)#this contains ratio also!        
         #==bool
         #self.is_msaa = False#onoff by glenable!
         #fps = 60 we not this. 1.vsync on, dosnt matter.  2.set fps, off vsync.
         #WE NOT USE VSYNC. all becomes very clear! (else vsync by monitor hz.. too bad.)
-        
+
+    #===============
     def close(self):
         """set flag. window shall be deleted in loop start."""
         glfwSetWindowShouldClose(self.window,True)
@@ -260,7 +193,7 @@ class Window:
         NAME.delete(self.name)        
         glfwDestroyWindow(self.window)#error occurs next draw code.
         self.window = None#we can not destroy py object.
-
+    #===============
     def glbind(self):#bind current make_current
         """make current requires 40ms of 1000x (12s:1ms)while gl int 4ms."""
         window = self.window
@@ -269,42 +202,82 @@ class Window:
             glfwMakeContextCurrent(window)
     def current(self):self.glbind()
 
-
     def bind_callback(self, inputmanager):
         window = self.window
         #https://www.glfw.org/docs/3.3/group__input.html
+        #joystick requires polling. no callback!
         glfwSetErrorCallback(inputmanager.error_callback)#instead glfwGetError()
         glfwSetKeyCallback(window, inputmanager.key_callback)
         glfwSetMouseButtonCallback(window, inputmanager.mouse_callback)
         glfwSetCursorPosCallback(window, inputmanager.cursor_callback)
-        glfwSetCursorEnterCallback(window, inputmanager.cursor_enter_callback)
         glfwSetScrollCallback(window, inputmanager.scroll_callback)
+        glfwSetCursorEnterCallback(window, inputmanager.cursor_enter_callback)
         glfwSetDropCallback(window, inputmanager.drop_callback)
-
         glfwSetFramebufferSizeCallback(window, inputmanager.fb_size_callback)
         glfwSetWindowPosCallback(window, inputmanager.pos_callback)
-    
+
+    #==============================
     #real window operations.
-    def hide(self):
+    def glfw_hide(self):
         glfwHideWindow(self.window)
-    def show(self):
+    def glfw_show(self):
         glfwShowWindow(self.window)
-    def iconfy(self):
+    def glfw_iconfy(self):
         glfwIconifyWindow(self.window)
-    def maximize(self):
+    def glfw_maximize(self):
         glfwMaximizeWindow(self.window)
-    def attention(self):
+    def glfw_attention(self):
         glfwRequestWindowAttention(self.window)#blink.wow.
-    def focus(self):#grab brutely. not wanted..
+    def glfw_focus(self):#grab brutely. not wanted..
         glfwFocusWindow(self.window)#destructive.
     
-    def set_gamma(self,value):
+    #============
+    #methods need input
+    def glfw_fullscreen(self, state=True):#this no need to be attr of window.
+        if state:
+            monitor = glfwGetPrimaryMonitor()
+            mode = glfwGetVideoMode(monitor)
+            mw,mh = mode.size
+            fps = mode.refresh_rate
+            glfwSetWindowMonitor(self.window, monitor, 0, 0, mw,mh, fps)
+        else:
+            x,y = 100,100
+            w,h = self.init_size
+            glfwSetWindowMonitor(self.window, None,x,y,w,h,0)
+
+    def glfw_gamma(self,value):
         """value 0.5-1.5 . bad for inter-monitor.."""
         value = clamp(0.5,1.5)
         monitor = glfwGetWindowMonitor(self.window)        
         glfwSetGamma(monitor, value)
-    def set_title(self,value):
+
+    def glfw_title(self,value):
         glfwSetWindowTitle(self.window, value)
+
+    def glfw_hide_cursor(self, hide=True):
+        if hide:glfwSetInputMode(self.window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN)
+        else:glfwSetInputMode(self.window, GLFW_CURSOR, GLFW_CURSOR_NORMAL)
+
+    def glfw_lock_cursor(self, lock=True):
+        if lock:glfwSetInputMode(self.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED)
+        else:glfwSetInputMode(self.window, GLFW_CURSOR, GLFW_CURSOR_NORMAL)
+
+    #===============gl operation requires context current first
+    def gl_msaa(self, state=True):
+        self.glbind()
+        if state:glEnable(GL_MULTISAMPLE)
+        else:glDisable(GL_MULTISAMPLE)
+    def gl_line_smooth(self, state=True):
+        self.glbind()
+        if state:glEnable(GL_LINE_SMOOTH)
+        else:glDisable(GL_LINE_SMOOTH)
+    def gl_polygon_smooth(self, state=True):
+        self.glbind()
+        if state:glEnable(GL_POLYGON_SMOOTH)
+        else:glDisable(GL_POLYGON_SMOOTH)
+
+
+
     #=============property
     #self.glbind() if gl functions used.(current context!)
     @property
@@ -313,16 +286,7 @@ class Window:
     @fps.setter
     def fps(self, fps):
         self.dt = 1/fps
-    #window.fps = 30
-    #fps = window.fps() and window.fps(30)
 
-    @property
-    def opacity(self):
-        return glfwGetWindowOpacity(self.window)
-        #return self.opacity
-    @opacity.setter
-    def opacity(self,opacity):
-        glfwSetWindowOpacity(self.window, opacity)
     #============================size
     @property
     def size(self):
@@ -345,8 +309,7 @@ class Window:
     @height.setter
     def height(self,height):
         width = glfwGetWindowSize(self.window)[0]
-        glfwSetWindowSize(self.window, width,height)
-    
+        glfwSetWindowSize(self.window, width,height)    
 
     #============================pos. window.x!
     #window.pos = (window.x+5,window.y+5). need property.
@@ -383,48 +346,20 @@ class Window:
         glfwSetCursorPos(self.window, cursor_pos[0],cursor_pos[1])
     @property
     def cursor_posx(self):
-        return glfwGetWindowPos(self.window)[0]
+        return glfwGetCursorPos(self.window)[0]
     @cursor_posx.setter
     def cursor_posx(self,cursor_posx):
-        height = glfwGetWindowPos(self.window)[1]
-        glfwSetWindowPos(self.window, cursor_posx,height)
+        height = glfwGetCursorPos(self.window)[1]
+        glfwSetCursorPos(self.window, cursor_posx,height)
     @property
     def cursor_posy(self):
-        return glfwGetWindowPos(self.window)[1]
+        return glfwGetCursorPos(self.window)[1]
     @cursor_posy.setter
     def cursor_posy(self,cursor_posy):
-        width = glfwGetWindowPos(self.window)[0]
-        glfwSetWindowPos(self.window, width,cursor_posy)
-    
+        width = glfwGetCursorPos(self.window)[0]
+        glfwSetCursorPos(self.window, width,cursor_posy)
 
-    def cursor_hide(self, lock=True):
-        if lock:glfwSetInputMode(self.window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN)
-        else:glfwSetInputMode(self.window, GLFW_CURSOR, GLFW_CURSOR_NORMAL)
-
-    def cursor_lock(self, lock=True):
-        if lock:glfwSetInputMode(self.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED)
-        else:glfwSetInputMode(self.window, GLFW_CURSOR, GLFW_CURSOR_NORMAL)
-        #bind mmove callback if c enabled.?
-        #https://www.glfw.org/docs/3.3/group__input.html#gaa92336e173da9c8834558b54ee80563b        
-
-    #don't know what current value is.
-    # @property
-    # def is_cursor_lock(self):
-    #     state = glIsEnabled(GL_MULTISAMPLE)
-    #     return state
-    # @is_cursor_lock.setter
-    # def is_cursor_lock(self, state):
-    #     if state:glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED)
-    #     else:glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL)
-
-    def not_thisisbutseemsbad_cursor_pos(self, pos=None):
-        if pos:
-            x,y=pos
-            glfwsetmousepos(x,y)
-        else:
-            return glfwGetCursorPos(self.window)
-    
-    #=============aspect and ..
+    #=============aspect and ..    
     @property
     def ratio(self):
         x,y = glfwGetWindowSize(self.window)
@@ -436,79 +371,13 @@ class Window:
             glfwSetWindowAspectRatio(self.window, x, y)
         else:
             glfwSetWindowAspectRatio(self.window, GLFW_DONT_CARE, GLFW_DONT_CARE)
-    #glfwSetWindowSizeLimits(window, 100, 100, GLFW_DONT_CARE, GLFW_DONT_CARE)
-    #glfwGetWindowContentScale(window, &xscale, &yscale);
-
-    def fullscreen_off(self):
-        x,y = 100,100
-        w,h = self.size
-        glfwSetWindowMonitor(self.window, None,x,y,w,h,0)
-        #glfwSetWindowMonitor(glfwGetWindowMonitor(self.window), None,x,y,w,h,0)
-    def fullscreen_on(self):#this no need to be attr of window.
-        #if full:        
-        #m_name = glfwGetMonitorName(monitor)
-
-        #those 3 all different!!
-        #monitor = glfwGetWindowMonitor(self.window)
-        # monitor = glfwGetPrimaryMonitor()#for full screen
-        # monitors = glfwGetMonitors()
-        # for i in monitors:
-        #     print(i,monitor,'=================mmmmm')
-        #     print(glfwGetWindowMonitor(self.window),'getsingle')
-        monitor = glfwGetPrimaryMonitor()
-        mode = glfwGetVideoMode(monitor)
-        mw,mh = mode.size
-        fps = mode.refresh_rate
-        glfwSetWindowMonitor(self.window, monitor, 0, 0, mw,mh, fps)
-
-    #===============gl operation requires context current first
-    #===================bool property is_.
-    @property
-    def is_msaa(self):
-        self.glbind()
-        state = glIsEnabled(GL_MULTISAMPLE)
-        return state
-    @is_msaa.setter
-    def is_msaa(self, state):
-        self.glbind()
-        if state:glEnable(GL_MULTISAMPLE)
-        else:glDisable(GL_MULTISAMPLE)
-
-    @property
-    def is_line_smooth(self):
-        self.glbind()
-        state = glIsEnabled(GL_LINE_SMOOTH)
-        return state
-    @is_line_smooth.setter
-    def is_line_smooth(self, state):
-        self.glbind()
-        if state:glEnable(GL_LINE_SMOOTH)
-        else:glDisable(GL_LINE_SMOOTH)
-
-    @property
-    def is_polygon_smooth(self):
-        self.glbind()
-        state = glIsEnabled(GL_POLYGON_SMOOTH)
-        return state
-    @is_polygon_smooth.setter
-    def is_polygon_smooth(self, state):
-        self.glbind()
-        if state:glEnable(GL_POLYGON_SMOOTH)
-        else:glDisable(GL_POLYGON_SMOOTH)
-
     
-
-    def not_that_bad_msaa(self, value=None):
-        self.glbind()
-        if value==None:#not False.
-            return glIsEnabled(GL_MULTISAMPLE)
-        elif value==True:
-            glEnable(GL_MULTISAMPLE)
-        else:
-            glDisable(GL_MULTISAMPLE)
-    #window.is_msaa = True#bool seems not functional.
-    #window.msaa(True)# value set.# this seems dont know whether 1 or 4..
-    #window.msaa()
+    @property#for fade effects kind.
+    def opacity(self):
+        return glfwGetWindowOpacity(self.window)
+    @opacity.setter
+    def opacity(self,opacity):
+        glfwSetWindowOpacity(self.window, opacity)
 
 
 
@@ -531,10 +400,6 @@ class Window:
 
 
 
-
-
-#glfwGetClipboardString
-#glfwSetClipboardString
 
 
 
@@ -729,12 +594,8 @@ class Window:
 
 
 
-
-
-#framebuffer_size_callback(window: GLFWwindow, width: int, height: int) -> None:
-# make sure the viewport matches the new window dimensions note that width and 
-# height will be significantly larger than specified on retina displays.
-#glViewport(0, 0, width, height)
+def fb_size_callback(window, width, height):
+    glViewport(0, 0, width, height)
 
 
 
@@ -1019,6 +880,36 @@ def main():
 
 #window.update = update_render
 
+
+def fullscreentest():
+    #not that works
+    w.glfw_fullscreen()
+    glClearColor(0,0,0, 0)
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+    drawf()
+    glfwSwapBuffers(w.window)
+    w.x=0
+    w.y = 0
+    time.sleep(3)
+    
+    glClearColor(0,0.5,0, 0)
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+    glfwSwapBuffers(w.window)
+
+    drawf()
+    #this moved window not triangle, so stuck was fine. it works!
+    for i in range(100):
+        glClearColor(0,0.0,0.9, 0.5)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        w.x+=10
+        drawf()
+        glfwSwapBuffers(w.window)
+        time.sleep(0.01)
+    time.sleep(2)
+    w.glfw_fullscreen(False)
+    time.sleep(4)
+
+
 if __name__ == "__main__":
     w = Window()
     #w.bind_callback()
@@ -1040,18 +931,122 @@ if __name__ == "__main__":
         glEnd()
     drawf()
     glfwSwapBuffers(w.window)
+
     w.y = 200
-    for i in range(100):
+    for i in range(20):
         time.sleep(0.01)
         w.x+=10
+        #w.cursor_posx+=5
     #time.sleep(2)
     
-    #not that works
-    # w.fullscreen_on()
-    # w.x=0
-    # w.y = 400
-    # for i in range(100):
-    #     time.sleep(0.01)
-    #     w.x+=10
-    # time.sleep(5)
-    # w.fullscreen_off()
+    
+#====================================================================
+#====================================================================
+#====================================================================
+#====================================================================
+#====================================================================
+
+
+#===============glfw minimum requirements.
+#(event callback) seems anywhere.
+#====on setup
+#glfw.init()
+#glfwWindowHint#before window
+#window = glfw.create_window(640, 480, 'new window', None, None)
+#glfw.make_context_current(window)#we gl, we write to here.
+#glEnable#after context(window)
+#====on draw
+# glClearColor(0, 0, 0, 1)
+# glClear(GL_COLOR_BUFFER_BIT)
+# glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)#if glEnable(GL_DEPTH_TEST)
+# glfw.swap_buffers(window)
+# glfw.poll_events()
+#====after run, return ram
+#glfwTerminate()
+#===============glfw minimum requirements.
+
+
+#============================gl else
+#glfwSetTime(time)
+#glfwGetFramebufferSize(window)#need callback?
+#glfwGetWindowAttrib.. not that. i like .ini , not in-game menu.
+#print(glfw.get_version_string())
+#glGetString(GL_VERSION)#b'4.6.0 NVIDIA 456.71'
+#glGetString(GL_SHADING_LANGUAGE_VERSION) #b'4.60 NVIDIA'
+
+#m_name = glfwGetMonitorName(monitor)
+#glfw.get_video_modes(monitor1)
+#GLFWvidmode(size=Size(width=720, height=480), bits=Bits(red=8, green=8, blue=8), refresh_rate=60)
+#GLFWvidmode(size=Size(width=1920, height=1080), bits=Bits(red=8, green=8, blue=8), refresh_rate=75)
+#those 3 all differnt!
+# monitor = glfwGetWindowMonitor(self.window)
+# monitor = glfwGetPrimaryMonitor()#for full screen
+# monitors = glfwGetMonitors()
+
+#about depth testing:
+#glEnable(GL_DEPTH_TEST)#test, discard fragment.
+#glDepthMask(GL_FALSE)#tmp stops write to depth buffer.
+#glDepthFunc(GL_LESS)#GL_ALWAYS
+#https://learnopengl.com/Advanced-OpenGL/Depth-testing
+
+
+#glfwGetClipboardString
+#glfwSetClipboardString
+
+#@vsync.setter
+# def vsync(self,vsync):
+#     """limit fps(powersave)by monitor. if slow draw, skips next loop."""
+#     if vsync:
+#         glfwSwapInterval(1)#0<0.001ms, 1:16ms,2:33ms, 10:5frame/s ..tearing(0)?
+#     else:
+#         glfwSwapInterval(0)
+#     self._vsync = vsync
+
+#=======this implements read-only.
+    # @property
+    # def main(self):
+    #     return self._main
+    # @main.setter
+    # def main(self,main):
+    #     1#not allow to set it.
+
+#============this is fixed settings. not changeable runtime.
+
+# ifyouwant_setting_saveload_by_dict_glfw_hint_namedict = {
+# 'transparent_fbuffer' : GLFW_TRANSPARENT_FRAMEBUFFER
+# 'always_on_top' : GLFW_FLOATING
+# 'resizable' : GLFW_RESIZABLE
+# 'samples' : GLFW_SAMPLES
+# 'decorated' : GLFW_DECORATED
+# }
+
+
+
+#glfwGetWindowContentScale(window, &xscale, &yscale);
+
+
+
+#glfwSetWindowAttrib
+#see not that useful.
+GLFW_DECORATED
+GLFW_RESIZABLE
+GLFW_FLOATING
+GLFW_AUTO_ICONIFY
+GLFW_FOCUS_ON_SHOW
+#glfwSetWindowShouldClose.
+#glfwSetWindowCloseCallback
+
+def set_monitor(self, idx):
+    #https://www.glfw.org/docs/3.3/monitor_guide.html#monitor_event
+    #monitor1 = glfwGetPrimaryMonitor()#for full screen
+    #monitors = glfwGetMonitors()
+    #monitor = monitors[idx]
+    #mode = glfwGetVideoMode(monitor)
+    #m_width,m_height = mode.size
+    #fps = mode.refresh_rate
+    #something window pos change..?
+    1
+
+#============================================
+#============================================
+#============================================
