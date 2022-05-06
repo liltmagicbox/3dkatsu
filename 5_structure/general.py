@@ -4,28 +4,84 @@
 from yamldict import YAML
 
 
+
+
+
+def clamp(n, smallest, largest): return max(smallest, min(n, largest))
+def clamp(target, a,b):
+    X = min(target,b)
+    return max(X,a)
+def clamp(target, minv, maxv):
+    if target<minv:
+        return minv
+    if target>maxv:
+        return maxv
+    return target
+#min/max 1ms while if < 700us.
+def ctest():
+    x = clamp(5,1,10)
+    y = clamp(5,6,15)
+    z = clamp(5,-5,3)
+    print(x,y,z)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import uuid
-class Uuid:
+class UUID:#all capitals.fine.
     """use UUID = Uuid(). since it holds data.."""
+    __slots__ = ['dict']
     def __init__(self):
         self.dict = {}
     def get(self, key):
         return self.dict.get(key, None)
     def set(self,item):
-        key = str(uuid.uuid4())
+        key = str(uuid.uuid4()).replace('-','_')#'cant-dclick'
         self.dict[key] = item
         return key
     def delete(self,key):
         if key in self.dict:
             self.dict.pop(key)
 
+
+class ID:#all capitals.fine.
+    """uuid too long. more simple way.."""
+    __slots__ = ['dict', 'next']
+    def __init__(self):
+        self.dict = {}
+        self.next = 0
+    def get(self, key):
+        return self.dict.get(key, None)
+    def set(self,item):
+        key = self.next
+        self.next+=1
+        self.dict[key] = item
+        return key
+    def delete(self,key):
+        if key in self.dict:
+            self.dict.pop(key)
+
+
 class Name:
     """name by class. use NAME=Name()
     maxN. but when _2max, del _2 new is _2 not _3."""
+    __slots__ = ['dict']
     def __init__(self):
         self.dict = {}# key clsname.
     def get(self, key):
-        clsname, _ = key.split('_')
+        #clsname, _ = key.split('_')
+        clsname = key.split('_')[0]
         return self.dict[clsname].get(key)
     def set(self,item):
         SELFDICT = self.dict
@@ -34,16 +90,79 @@ class Name:
             SELFDICT[clsname] = {}        
         key = clsname+'_0'
         if key in SELFDICT[clsname]:
-            nums = [int(key.split('_')[1]) for key in SELFDICT[clsname].keys()]
+            nums = [int(key.split('_')[-1]) for key in SELFDICT[clsname].keys()]
             newnum = max(nums)+1
             key = clsname+'_'+str(newnum)
 
         self.dict[clsname][key] = item
         return key
     def delete(self,key):
-        clsname, _ = key.split('_')
+        clsname = key.split('_')[0]
         if key in self.dict[clsname]:
             self.dict.pop(key)
+
+
+
+
+
+
+
+
+#dd = YAML.load('glfw_keydict.yaml')
+#print(dd)
+
+
+import inspect
+#inspect.getargspec() is deprecated since Python 3.0,
+#use inspect.signature() or inspect.getfullargspec()
+#args = inspect.getargspec(isfunc)
+def detailMaker(self):
+    #return [x for x in dir(self) if not x.startswith('__')]
+    sdirs = [x for x in dir(self) if not (x.startswith('__') or x.startswith('_') ) ]    
+    sort = []
+    if 'UUID' in sdirs:
+        sort.append('UUID')
+        sdirs.remove('UUID')
+    if 'ID' in sdirs:
+        sort.append('ID')
+        sdirs.remove('ID')
+    if 'type' in sdirs:
+        sort.append('type')
+        sdirs.remove('type')
+    if 'name' in sdirs:
+        sort.append('name')
+        sdirs.remove('name')
+    sort.extend(sdirs)
+    sdirs = sort
+    
+    lines = []
+    getline = lambda x,y: f"{x}: {y}"
+    for attr in sdirs:
+        if attr == 'detail':
+            #line = getline('detail', 'now printing')
+            continue            
+        isfunc = getattr(self, attr)
+        desc = str(type(isfunc))
+        if 'function' in desc or 'method' in desc:#bark: <bound method Actor.bark of actor_0>
+            args = inspect.signature(isfunc)#bark: (self, x)
+            line = getline(attr,args)
+        else:
+            line = getline(attr,isfunc)
+        lines.append(line)
+    return '\n'.join(lines)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 from matplotlib import pyplot as plt
@@ -56,7 +175,7 @@ class Plotter:
             Y = X
             X = [i for i in range(len(Y))]
         #plt.plot(X,Y, 'r-o')
-        plt.plot(X,Y, 'ro')
+        plt.plot(X,Y, 'r-^')
     def show(self):
         plt.show()
     def save(self, fdir):
@@ -88,6 +207,14 @@ class Plotter:
 #         pad_inches=0.1,
 #         frameon=None, 
 #         metadata=None)
+
+
+
+
+
+
+
+
 
 from time import perf_counter
 def timef():
@@ -182,21 +309,4 @@ def logtest():
     print(log)
 #logtest()
 
-def clamp(n, smallest, largest): return max(smallest, min(n, largest))
-def clamp(target, a,b):
-    X = min(target,b)
-    return max(X,a)
-def clamp(target, minv, maxv):
-    if target<minv:
-        return minv
-    if target>maxv:
-        return maxv
-    return target
-#min/max 1ms while if < 700us.
-
-def ctest():
-    x = clamp(5,1,10)
-    y = clamp(5,6,15)
-    z = clamp(5,-5,3)
-    print(x,y,z)
 
