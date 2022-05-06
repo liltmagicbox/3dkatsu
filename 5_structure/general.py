@@ -32,11 +32,18 @@ def ctest():
 
 
 
+#not protected but fast
+#__slots__ = ['dict']
+#    self.dict = {}
 
-
-
-
-
+#only protected dict but not _dict.
+# u=UUID()
+# key = u.set(1)
+# r = u.get(key)
+# #u.delete(key)
+# u._dict = 'x'
+# print(dir(u))
+#print(u)
 
 import uuid
 class UUID:#all capitals.fine.
@@ -44,6 +51,8 @@ class UUID:#all capitals.fine.
     __slots__ = ['dict']
     def __init__(self):
         self.dict = {}
+    def __repr__(self):
+        return str(self.dict)
     def get(self, key):
         return self.dict.get(key, None)
     def set(self,item):
@@ -73,33 +82,48 @@ class ID:#all capitals.fine.
             self.dict.pop(key)
 
 
+
 class Name:
     """name by class. use NAME=Name()
-    maxN. but when _2max, del _2 new is _2 not _3."""
-    __slots__ = ['dict']
+    N is class historic number"""
+    #once maxN, 10k for 9.2Seconds. now 16ms.
+    __slots__ = ['dict','next']
     def __init__(self):
         self.dict = {}# key clsname.
+        self.next = {}#each class. 9250 vs 16ms
     def get(self, key):
         #clsname, _ = key.split('_')
         clsname = key.split('_')[0]
         return self.dict[clsname].get(key)
-    def set(self,item):
+    def set(self,item, name=None):
         SELFDICT = self.dict
-        clsname = item.__class__.__name__.lower()
-        if not clsname in SELFDICT:
-            SELFDICT[clsname] = {}        
-        key = clsname+'_0'
-        if key in SELFDICT[clsname]:
-            nums = [int(key.split('_')[-1]) for key in SELFDICT[clsname].keys()]
-            newnum = max(nums)+1
-            key = clsname+'_'+str(newnum)
+        NEXTDICT = self.next
 
+        clsname = item.__class__.__name__.lower()
+        if not name==None:
+            clsname = name
+        if not clsname in SELFDICT:
+            SELFDICT[clsname] = {}
+        if not clsname in NEXTDICT:
+            NEXTDICT[clsname] = 0
+
+        # key = clsname+'_0'
+        # if key in SELFDICT[clsname]:
+        #     nums = [int(key.split('_')[-1]) for key in SELFDICT[clsname].keys()]
+        #     newnum = max(nums)+1
+        #     key = clsname+'_'+str(newnum)        
+        key = f"{clsname}_{NEXTDICT[clsname]}"
         self.dict[clsname][key] = item
+        self.next[clsname]+=1
         return key
-    def delete(self,key):
-        clsname = key.split('_')[0]
+    def delete(self,key):#4ms added 10k.fine.
+        splits = key.split('_')
+        clsname = splits[0]
+        number = int(splits[-1])
         if key in self.dict[clsname]:
-            self.dict.pop(key)
+            self.dict[clsname].pop(key)
+        if self.next[clsname]-1 == number:
+            self.next[clsname] = self.next[clsname]-1
 
 
 
@@ -310,3 +334,37 @@ def logtest():
 #logtest()
 
 
+
+
+
+
+
+
+#name historic N chagned:
+#9.25Seconds to 16ms.
+# t=timef()
+# for i in range(10000):
+#     s = Sss(1,2,3)
+# print(timef()-t)
+
+
+
+
+#find -1 /  index exception.
+
+#spdtest: split better!
+
+# a = 'tirmao_aergherh_erhaerh_4'
+# t=timef()
+# for i in range(10000000):
+#     idx = a.find('_')
+#     x = a[:idx]
+# print(timef()-t)
+
+# a = 'tirmao_aergherh_erhaerh_4'
+# t=timef()
+# for i in range(10000000):
+#     x = a.split('_')[0]
+# print(timef()-t)
+# #1.7910591999999999
+# #1.6936456
