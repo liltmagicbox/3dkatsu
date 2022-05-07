@@ -160,7 +160,7 @@ def detailMaker(self):
     sdirs = sort
     
     lines = []
-    getline = lambda x,y: f"{x}: {y}"
+    getline = lambda x,y: f"{x}: {y:.6f}" if isinstance(y,float) else f"{x}: {y}"
     for attr in sdirs:
         if attr == 'detail':
             #line = getline('detail', 'now printing')
@@ -368,3 +368,27 @@ def logtest():
 # print(timef()-t)
 # #1.7910591999999999
 # #1.6936456
+
+#_0____________________-=========================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
