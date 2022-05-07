@@ -2,9 +2,9 @@
 from glfw.GLFW import *
 from OpenGL.GL import *
 
-from general import Logger, YAML, timef, Plotter, Uuid,Name
+from general import Logger, YAML, timef, Plotter, UUID,Name
 NAME = Name()
-UUID = Uuid()
+UUID = UUID()
 log = Logger(print=True)
 
 
@@ -83,6 +83,7 @@ default_window_setting_dict={
 
 }
 
+
 def load_window_settings(fdir):
     if os.path.exists(fdir):
         dd = YAML.load(fdir)
@@ -122,10 +123,16 @@ glfwInit()
 #here, insures it ran mainthread.(while import)
 #little ram but fine. window 1st, renderer 2nd.
 
+default_yml_fdir = 'window_setting.yml'
 class Window:
-    def __init__(self, yml_fdir = 'window_setting.yml'):
-        #=====setting before window
+    @classmethod
+    def from_yaml(cls, yml_fdir=None):
+        if yml_fdir == None:
+            yml_fdir = default_yml_fdir
         window_setting_dict = load_window_settings(yml_fdir)
+    def __init__(self):
+        #=====setting before window
+        window_setting_dict = default_window_setting_dict
         #------ special hint for gles31 for rpi4. default max gl version.
         gles31 = window_setting_dict['gles31']
         if gles31:#for low version 3.1 only.not3.0.        
@@ -279,7 +286,7 @@ class Window:
 
 
 
-    #=============property
+    #=============property .. all lower, toolongCapital rule. partial be like x,w
     #self.glbind() if gl functions used.(current context!)
     @property
     def fps(self):#0.001= 1ms
@@ -298,19 +305,19 @@ class Window:
         glfwSetWindowSize(self.window, size[0],size[1])
         #self.size = size
     @property
-    def width(self):
+    def w(self):
         return glfwGetWindowSize(self.window)[0]
-    @width.setter
-    def width(self,width):
-        height = glfwGetWindowSize(self.window)[1]
-        glfwSetWindowSize(self.window, width,height)
+    @w.setter
+    def w(self,w):
+        h = glfwGetWindowSize(self.window)[1]
+        glfwSetWindowSize(self.window, w,h)
     @property
-    def height(self):
+    def h(self):
         return glfwGetWindowSize(self.window)[1]
-    @height.setter
-    def height(self,height):
-        width = glfwGetWindowSize(self.window)[0]
-        glfwSetWindowSize(self.window, width,height)    
+    @h.setter
+    def h(self,h):
+        w = glfwGetWindowSize(self.window)[0]
+        glfwSetWindowSize(self.window, w,h)    
 
     #============================pos. window.x!
     #window.pos = (window.x+5,window.y+5). need property.
@@ -340,25 +347,28 @@ class Window:
     #===================================cursor pos
     #for i in .. window.cursor_posx+=5
     @property
-    def cursor_pos(self):
+    def mpos(self):
+        """mouse pos"""
         return glfwGetCursorPos(self.window)
-    @cursor_pos.setter
-    def cursor_pos(self,cursor_pos):
-        glfwSetCursorPos(self.window, cursor_pos[0],cursor_pos[1])
+    @mpos.setter
+    def mpos(self,mpos):
+        glfwSetCursorPos(self.window, mpos[0],mpos[1])
     @property
-    def cursor_posx(self):
+    def mx(self):
+        """mouse x"""
         return glfwGetCursorPos(self.window)[0]
-    @cursor_posx.setter
-    def cursor_posx(self,cursor_posx):
+    @mx.setter
+    def mx(self,cursor_posx):
         height = glfwGetCursorPos(self.window)[1]
         glfwSetCursorPos(self.window, cursor_posx,height)
     @property
-    def cursor_posy(self):
+    def my(self):
         return glfwGetCursorPos(self.window)[1]
-    @cursor_posy.setter
-    def cursor_posy(self,cursor_posy):
+    @my.setter
+    def my(self,cursor_posy):
         width = glfwGetCursorPos(self.window)[0]
         glfwSetCursorPos(self.window, width,cursor_posy)
+
 
     #=============aspect and ..    
     @property
@@ -616,19 +626,22 @@ def char_callback(window, codepoint):
     (0xAC00<= codepoint <= 0xD7A3):
         #uni = '\u'+str(codepoint)
         uni = chr(codepoint)
-        print(uni)
-    else:
-        uni = chr(codepoint)
-        print(uni)
-        #print(codepoint,'hak')        
+        #print(uni)
+    uni = chr(codepoint)
+    print(uni)
 
-def key_callback(window, key, scancode, action, mods):   
-    print(key,scancode)
-    num = key_dict.get(key)
-    #print(num)
-    #print(num,scancode,key)
-    if num == 'ESCAPE':
+
+def key_callback(window, key, scancode, action, mods):
+    #action 0,1 and 2.
+    #mods 1 2 4 of shift ctrl alt
+    #print(action,mods)
+    kkey = key_dict.get(key)
+    if kkey == 'ESCAPE':
         w.close()
+    if kkey =='A':
+        w.cursor_x-=50
+    if kkey =='D':
+        w.cursor_x+=50
 
     GLFW_PRESS
     GLFW_REPEAT
@@ -958,7 +971,7 @@ if __name__ == "__main__":
     for i in range(20):
         time.sleep(0.01)
         w.x+=10
-        #w.cursor_posx+=5
+        w.mx+=5
     #time.sleep(2)
     w.bind_callback()
     while not w.should_close():
