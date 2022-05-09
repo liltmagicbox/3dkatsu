@@ -32,17 +32,22 @@ class Layer:
 	def __repr__(self):
 		if self.empty:
 			return f"layer {self.coords}"
-		if self.name:
-			return str(self.name)
+		#if self.name:
+		return str(self.name)
+	#==========================	
+	@property
+	def items(self):
+		if self.empty:
+			return f"layer {self.coords}"
 
-		rstr = f"{self.__class__.__name__} {self.name} ({len(self._list)})["
+		rstr = f"{self.__class__.__name__}/{self.name}/{self.coords}/ ({len(self._list)})["
 		for item in self._list:
 			rstr+='\n----'
-			rstr+=str(item)
+			rstr+= item.items
 			rstr+=', '
-		rstr+='\n]'		
+		rstr+='\n]'
 		return rstr
-	#==========================	
+
 	@property
 	def root(self):return self._root
 	@property
@@ -128,6 +133,9 @@ class Layer:
 		raise Exception("not implemented!")
 
 
+
+
+
 class Layer_size(Layer):
 	def move(self, x,y):
 		"""center point x,y"""
@@ -137,41 +145,45 @@ class Layer_size(Layer):
 		y1+=y
 		y2+=y
 		self.coords = (x1,y1,x2,y2)
+		#====left all
+		for item in self._list:
+			item.move(x,y)
 	def moveto(self, x,y):
 		"""center point x,y"""
 		x1,y1,x2,y2 = self.coords
 		__,__,w,h = self.to_xywh(x1,y1,x2,y2)
-		x1,y1,x2,y2 = self.to_x1y1(x,y,w,h)
-		self.coords = (x1,y1,x2,y2)
-	def resize(self, w,h):
+		self.coords = self.to_x1y1(x,y,w,h)
+		#====left all
+		for item in self._list:
+			item.moveto(x,y)
+
+	#====resize directly to X,Y. strict.
+	#-not add size kinds.
+	def resize(self, w,h, fixed=False):
 		"""keep the center"""
 		x1,y1,x2,y2 = self.coords
-		ww = (x2-x1)/2
-		hh = (y2-y1)/2
-		x1=ww
-		x2=ww
-		y1-=hh
-		y2+=hh
-		self.coords = (x1,y1,x2,y2)
+		mx,my,w2,h2 = self.to_xywh(x1,y1,x2,y2)
 
-	@classmethod
-	def p1p2(cls, p1,p2):
-		x1,y1 = p1
-		x2,y2 = p2
-		if x1>x2: x1,x2 = x2,x1
-		if y1>y2: y1,y2 = y2,y1
-		return cls(x1,y1,x2,y2)
-	@classmethod
-	def xywh(cls, x,y,w,h):
-		x1,y1,x2,y2 = cls.to_x1y1(x,y,w,h)
-		return cls(x1,y1,x2,y2)
-	
+		if fixed:
+			x1,y1,x2,y2 = self.to_x1y1(mx,my,w,h)
+			self.coords = x1,y1,x2,y2
+		else:
+			ratio_w = w/w2#70/800 0.0875
+			ratio_h = h/h2
+			new_w = ratio_w*w2
+			new_h = ratio_h*h2
+			x1,y1,x2,y2 = self.to_x1y1(mx,my,new_w,new_h)
+			self.coords = x1,y1,x2,y2			
+		#====left all
+		for item in self._list:
+			item.resize(w,h, fixed)
+	#==========
 	@classmethod
 	def to_x1y1(cls, x,y,w,h):
 		ww,hh = (w/2 , h/2) #not int. what if 0-1.0 world?
 		x1,x2 = (x-ww),(x+ww)
 		y1,y2 = (y-hh),(y+hh)
-		return (x1,y1,x2,y2)	
+		return (x1,y1,x2,y2)
 	@classmethod
 	def to_xywh(cls, x1,y1,x2,y2):
 		x = (x2+x1)/2
@@ -198,6 +210,22 @@ class Layer_size(Layer):
 	def size(self, wh):
 		self.resize(wh[0],wh[1])
 	#==========
+	@classmethod
+	def p1p2(cls, p1,p2):
+		x1,y1 = p1
+		x2,y2 = p2
+		if x1>x2: x1,x2 = x2,x1
+		if y1>y2: y1,y2 = y2,y1
+		return cls(x1,y1,x2,y2)
+	@classmethod
+	def xywh(cls, x,y,w,h):
+		x1,y1,x2,y2 = cls.to_x1y1(x,y,w,h)
+		return cls(x1,y1,x2,y2)
+	#======================
+
+
+class Layer_autosizer(Layer_size):
+	""" if resize, all resized by parent"""
 
 
 
@@ -235,9 +263,17 @@ def brute_test():
 	layer.move(10,10)
 	layer.moveto(10,10)
 	layer.moveto(550,10)
-	layer.size = (500,500)
 	layer.pos = 50,50
-	print(layer.pos)
+	#layer.size = (500,500)
+	
+	print('====================')
+	print(base.items)
+	base.resize(100,100)
+	print('====================')
+	print(base.items)
+	base.resize(70,70,True)
+	print('====================')
+	print(base.items)
 
 
 	#layer.click(x,y)
