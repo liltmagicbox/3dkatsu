@@ -652,9 +652,28 @@ def key_callback(window, key, scancode, action, mods):
     #GLFW_PRESS = 1 #2 pressing 0 unp
 
 def mouse_button_callback(window, button, action, mods):
-    print(button)
+    if action==1:
+        x,y = w.mpos
+        ww,hh = w.size
+        x,y = x/ww, y/hh
+
+        x = (x*2)-1
+        y = (1-y-0.5)*2
+        #print(x,y)
+        xxxx = dd.hit(x,y)
+        print('callback',button,'mbutton',x,y,'xxx', xxxx)
+        print(dd.items)
 def cursor_pos_callback(window, xpos,ypos):
     1#print(xpos,ypos)
+    # x,y = w.mpos
+    # ww,hh = w.size
+    # x,y = x/ww, y/hh
+
+    # x = (x*2)-1
+    # y = (1-y-0.5)*2
+    # #print(x,y)
+    # dd.hit(x,y)
+    # print('pos',xpos,ypos)
 def scroll_callback(window, xoffset, yoffset):
     print(yoffset)
 
@@ -945,26 +964,63 @@ def fullscreentest():
     time.sleep(4)
 
 
+from uilayer import Layer_draw
+import random
+
+def get_range():
+    #x,y = random.random() , random.random()
+    x,y = (random.random()-0.5)*2, (random.random()-0.5)*2    
+    return x,y
+
+def onhit(self):
+    self.destroy()
+    print('new_onhit',self.pos)
+
 if __name__ == "__main__":
+    #dd = Layer_draw(0,0,0.5,0.4)
+    #dd.append(Layer_draw(-0.5,0.7,-0.2,-0.2))
+    x,y = (0,0)#get_range()
+    w,h = (2,2)#get_range()    
+    dd = Layer_draw.xywh(x,y,w,h)
+    dd.on_hit = onhit
+
+    for i in range(5):
+        x,y = get_range()
+        w,h = get_range()
+        if w<0.1:w+=0.1
+        if h<0.1:h+=0.1
+        d = Layer_draw.xywh(x,y,w,h)        
+        d.on_hit = onhit
+        d.consume = True
+        dd.append(d)
+    
     w = Window()
     #w.bind_callback()
 
     glClearColor(0,0,0, 0)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-    
     ts = []
     def drawf():
-        glBegin(GL_TRIANGLES)
+        glBegin(7)#GL_TRIANGLES
         verts = [
         [-1,0,0],
         [0.5,0,0],
-        [0,0.8,0],
+        [0,0.1,0],
+        ]
+        verts = [
+        [-1,0,0],
+        [0,-0.5,0],
+        [1,0,0],
+        [0,0.9,0],
         ]
         for vert in verts:
             glVertex3fv(vert)
         ts.append(timef())
         glEnd()
-    drawf()
+    #drawf()
+
+    dd.draw()
+
     glfwSwapBuffers(w.window)
 
     w.y = 200
@@ -977,6 +1033,15 @@ if __name__ == "__main__":
     while not w.should_close():
         time.sleep(0.001)
         glfwPollEvents()
+
+
+
+        glClearColor(0,0,0, 0)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        dd.update(0.016)
+        dd.draw()
+
+        glfwSwapBuffers(w.window)
 
     
 #====================================================================
