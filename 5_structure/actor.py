@@ -31,32 +31,160 @@ NORMAL	= VISIBLE+UPDATE+PHYSICS
 #1.global attrs. and combi of attrs => states
 # each applications see attr board, do what they want.
 
-state_dict = {
+
+
+#============================== get overwrite happens
+class Get:
+	#__slots__=['ham','attr']#whether do or not.
+	def __init__(self):
+		self.attr = 11
+	def __getattr__(self,name):#do if failed to find key in self.__dict__
+		return 555
+	def __getattribute__(self,name):#do anyway.
+		return 999999#if you enable this, you see 999999 x4 only.
+g=Get()
+print( g.ham )#555
+g.ham = 99
+print( g.ham )#99
+print( getattr(g,'ham'))
+print( g.__dict__ )#{'attr': 11, 'ham': 99} #since setattr is not overwritten.
+#============================== get overwrite happens
+
+oldSTATE_DICT = {
 1:'visible',
 2:'update',
 4:'physics'
 }
 
-class StateMachine:
-	__slots__ = ['_state']+list(state_dict.values())
+class bad_attr_StateMachine:
+	__slots__ = ['_state']#+list(STATE_DICT.values())
 	def __init__(self):
 		self._state = 0b111
 		#self.visible = True
 		#self.physics = True
-		for i,name in state_dict.items():			
-			setattr(self,name,True)
+		#for name in STATE_DICT:
+		#setattr(self,name,True)
+
+
+
+#==========donno i wanna not useit..
+class Setter:
+	__slots__ = ['state',]#use even tuple!
+	def __init__(self):
+		self.state = 0b111
+	def __set__(self, instance, value):
+		instance.state = value
+		print(value)
+s=Setter()
+s.state=4
+print(s.state)
+#==========donno i wanna not useit..
+
+STATE_DICT = {
+'visible':1,
+'update':2,
+'physics':4
+}
+
+class StateMachine:
+	__slots__ = ['state',]#use even tuple!
+	def __init__(self):
+		self.state = 0b111
+	def __getattribute__(self,name):#override all get.
+		if name=='state':#except state.
+			return super().__getattribute__(name)#hope it fast enough. i think so.
+		return self.state & STATE_DICT[name]
+
+	def __setattr__(self,name,value):
+		if name=='state':#except state.
+			return super().__getattribute__(name)#hope it fast enough. i think so.
+		return self.state & STATE_DICT[name]
+
+	
 	def __repr__(self):
+		print(dir(self))		
 		self_state = self._state
 		strs = []
-		for i,name in state_dict.items():
+		for i,name in STATE_DICT.items():
 			if self_state & i:
 				strs.append(name)
 		return '|'.join(strs)
+	
 
-s = StateMachine()
+
+['__class__', '__delattr__', '__dir__', '__doc__', '__eq__', '__format__', '__ge__', 
+'__getattribute__', '__gt__', '__hash__', '__init__', '__init_subclass__', '__le__',
+ '__lt__', '__module__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__',
+  '__setattr__', '__sizeof__', '__slots__', '__str__', '__subclasshook__', '_state']
+
+
+#s = StateMachine()
+#print(s.state)
+
+#print(s.update)
+#s.physics = True
+#print(help(s.__slots__))
+#print(s)
+
+#=========================================
+STATE_DICT = {
+'visible':1,
+'update':2,
+'physics':4
+}
+#state on the local ground:
+visible =1
+update = 2
+physics =4
+
+
+class StateMachine:
+	__slots__ = ['state',]#use even tuple!
+	def __init__(self):
+		self.state = 0b101
+	def __getattribute__(self,name):#override all get.
+		if name=='state':#except state.
+			return super().__getattribute__(name)#hope it fast enough. i think so.
+		return self.state & STATE_DICT[name]
+
+s=StateMachine()
+import timeit
+
+
+
+
+t1 = timeit.timeit(lambda:s.update, number=1000000)
+print(t1)
+
 print(s.update)
-s.physics = True
-print(s)
+
+
+STATE_LIST = [
+'visible',
+'update',
+'physics',
+]
+#use idx, first one be first.
+
+#idx = state_list.find(key)
+#return self.state[idx]
+
+class StateMachine:
+	__slots__ = ['_state',]#use even tuple!
+	def __init__(self):
+		self._state = [False for i in range(len(STATE_LIST))] #0b111		
+	
+	def __getattribute__(self,name):#override all get.
+		if name=='_state':#except state.
+			return super().__getattribute__(name)#hope it fast enough. i think so.
+		idx = STATE_LIST.index(name) #vs DICT[name]
+		return self._state[idx]
+
+s=StateMachine()
+print(s.update)
+t1 = timeit.timeit(lambda:s.update, number=1000000)
+print(t1)
+
 
 exit(0)
 
