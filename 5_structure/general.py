@@ -85,7 +85,9 @@ class ID:#all capitals.fine.
 
 class Name:
     """name by class. use NAME=Name()
-    N is class historic number"""
+    N is class historic number
+    ver 0.1, why lower()? >>> NamerNames kinds. func_is_this_way.
+    """
     #once maxN, 10k for 9.2Seconds. now 16ms.
     __slots__ = ['dict','next']
     def __init__(self):
@@ -99,7 +101,7 @@ class Name:
         SELFDICT = self.dict
         NEXTDICT = self.next
 
-        clsname = item.__class__.__name__.lower()
+        clsname = item.__class__.__name__#.lower()
         if not name==None:
             clsname = name
         if not clsname in SELFDICT:
@@ -160,6 +162,8 @@ def detailMaker(self):
     sdirs = sort
     
     lines = []
+    funcs = []
+    attrs = []
     getline = lambda x,y: f"{x}: {y:.6f}" if isinstance(y,float) else f"{x}: {y}"
     for attr in sdirs:
         if attr == 'detail':
@@ -170,9 +174,16 @@ def detailMaker(self):
         if 'function' in desc or 'method' in desc:#bark: <bound method Actor.bark of actor_0>
             args = inspect.signature(isfunc)#bark: (self, x)
             line = getline(attr,args)
+            funcs.append(line)
         else:
             line = getline(attr,isfunc)
-        lines.append(line)
+            attrs.append(line)
+        #lines.append(line)
+    lines.append('----- methods -----')
+    lines.extend(funcs)
+    lines.append('\n----- attrs -----')
+    lines.extend(attrs)
+    lines.append('\n----- detail -----\n')
     return '\n'.join(lines)
 
 
