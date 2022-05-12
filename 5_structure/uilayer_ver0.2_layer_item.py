@@ -4,10 +4,69 @@
 from general import Name,detailMaker
 NAME = Name()
 
+
+class Layer:
+    def __init__(self):
+        self._list = []
+    def add(self, item):
+        self._list.append(item)
+class Item:
+    def __init__(self, x1,y1,x2,y2):
+        self.coords = (x1,y1,x2,y2)
+        self.consume = True        
+        self.name = NAME.set(self)
+    def __repr__(self):
+        return str(self.name)
+    def hitTest(self, x,y):
+        """not boundary, if x1<x<x2 and y1<y<y2:"""
+        (x1,y1,x2,y2) = self.coords
+        return x1<x<x2 and y1<y<y2
+    #=====================================
+    def to_xywh(self):
+        x1,y1,x2,y2 = self.coords
+        x = (x2+x1)/2
+        y = (y2+y1)/2
+        w = x2-x1
+        h = y2-y1
+        return x,y,w,h
+    #=====================================
+    @property
+    def pos(self):
+        (x1,y1,x2,y2) = self.coords
+        x,y,w,h = self.to_xywh( x1,y1,x2,y2)
+        return x,y
+    @pos.setter
+    def pos(self, xy):
+        self.moveto(xy[0],xy[1])
+    @property   
+    def size(self):
+        (x1,y1,x2,y2) = self.coords
+        x,y,w,h = self.to_xywh( x1,y1,x2,y2)
+        return w,h
+    @size.setter
+    def size(self, wh):
+        self.resize(wh[0],wh[1])
+
+layer = Layer()
+#=================
+item = Item()
+item.pos = (0.5,0.5)
+item.x+=0.5
+layer.add(item)
+#=================
+item = Item()
+
+layer.add(item)
+
+exit()
+
+
+
 def hitTest(coords, x,y):
     """not boundary, if x1<x<x2 and y1<y<y2:"""
     (x1,y1,x2,y2) = coords
     return x1<x<x2 and y1<y<y2
+
 
 class Layer:
     def __init__(self, x1,y1,x2,y2):#x0,x1 brings question about x2. but not x3.
