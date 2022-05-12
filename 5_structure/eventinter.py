@@ -133,28 +133,31 @@ class EventInter:
 	"""E interpreter or inter-object distributer.
 	it's for singleton, use it as EI = E..()"""
 	def __init__(self):
-		self.list = []
+		self.events = []
 		self.targets = []#{}#target UUID		
 	def add(self, event):
-		self.list.append(event)
+		self.events.append(event)
 	def add_target(self, target):
 		self.targets.append(target)
+
+	def set_parser(self, event_type, parser):
+		edict[event_type] = parser
 
 
 	#==================================
 	def broadcast(self):
 		"""broad cast, casting events to target get from to(targetUUID)"""
-		for event in self.list:
+		for event in self.events:
 			target = event.to
 			if target ==None:
 				self.cast(self,event)
 			else:
 				target = UUID.get(target)
-				#target.cast(event)
-				self.cast(target,event)
-		self.list = []
+				target.cast(event)
+				#self.cast(target,event)
+		self.events = []
 	#===============
-	#@classmethod
+	@classmethod
 	def cast(cls, self, event):
 		"""will be used here only. cls, and realself."""
 		#print(event,'from EI.')
@@ -166,6 +169,7 @@ class EventInter:
 			if hasattr(self, funcs):
 				func = getattr(self, funcs)
 				func(value)
+				#if self.consume:
 			else:
 				return
 		#this is!we done. ignore below..		
@@ -180,11 +184,32 @@ class EventInter:
 	def fire(self,value):
 		print('fire', value*1000)
 
+
 class W:
 	def __init__(self):
 		self.UUID = UUID.set(self)
+		self.actor_event_dict = {}
 	def fire(self,value):
 		print('wwwwwwwwfire', value*1000)
+	def cast(self, event):
+		EventInter.cast(self,event)
+		print('iiiiiiiiiiiimmmmmmmmmmmwwwwwwwwww')
+
+		if event.type in self.actor_event_dict:
+			for actor in self.actor_event_dict[event.type]:
+				EventInter.cast(actor, event)
+
+class Ww:
+	def __init__(self):
+		self.UUID = UUID.set(self)
+		self.actor_event_dict = {}
+	def fire(self,value):
+		print('is is i si si si s', value*10)
+actor1 = Ww()
+actor2 = Ww()
+aed = {
+	'key':[actor1,actor2]
+}
 
 
 #===at world,
@@ -194,6 +219,7 @@ def input(self, events):
 EI = EventInter()
 
 w=W()
+w.actor_event_dict = aed
 EI.add_target(w)
 
 e=Event('key', ('A',1.0) )
@@ -297,3 +323,76 @@ exit()
 
 'fireArrow' : 'getArrow-setFire-setFront-fire' #if arrows allows fire, fire only for tip. allow list.
 }
+
+#==============================
+#funcs imported by py file.
+
+#stateM for update
+#-----------rule: 1.name refs internal, finally func. - is connector, (x) is input.
+def left(self):
+	#self.pos+=1 #not this!!!
+	self.speed =1
+
+def wait(self,time):
+	1
+	#-thread,after??
+	#we don't want delay or block cpu..
+
+#maybe we can use thread. it's sequence of itself. capsuled.
+"wander": "left-wait(1)-right-wait(1)" #sincce left changes the direction,speed.
+
+#OR
+#state wait
+#if update, timer+=dt / timer<self.time: 
+#... not instant execute( if you do 100times, it will consume runtime!)
+#but per-update execute? i loveit! (100times itself has cost, now. for time's sake.)
+#and massive magic requires time.. by natual.
+
+#at world
+
+def input(self,events):
+	for event in events:
+		#EI.cast(event)# event target is world. what world can do next?
+		EI.cast(event)#run world's method.
+#EI interprete, run func of target..?
+#=======================
+#ai,physics. ai from stateM
+def ai_update(self):#??????????
+	for actor in self.actors:
+		actor.ai_update()
+
+def update(self,dt):
+	for actor in self.actors:
+		actor.update(dt)
+def update_prepost(self,dt):
+	#complex pre-physics-post update.
+	#=================================
+	physics_list = []
+	#===1 pre
+	for actor in self.actors:
+		actor.update_pre(dt)
+		if actor.physics and (not actor.AXIS):
+			physics_list.append(actor)
+	#===2 physics
+	for actor in physics_list:
+		actor.update_physics(dt)
+	AXIS.update_physics(dt)
+	#===3 post
+	for actor in self.actors:
+		actor.update_post(dt)
+	#=================================
+
+#world however havenot draw feature.fine.
+		
+
+'actor':{
+	'input':
+	'update':
+}
+
+state = {
+	'input': ['run', 'stop', 'sleep'],
+	'update': actor['update']+'-newone',
+}
+
+'freezed':

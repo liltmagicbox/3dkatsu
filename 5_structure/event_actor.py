@@ -1,23 +1,93 @@
-from general import Name, UUID, ID, detailMaker
+from general import Name, UUID, ID, detailMaker, timef
 NAME = Name()
 UUID = UUID()
 ID = ID()
 
+#2nd way. we do not this.  reason 1:slow inherit parent __slot but son __dict??
+#and hard to create class eachtime. but simply type, dict. we know 2 and got new event.
+# class Event:
+#     __slots__ = ['_from','_to', '_time' ]#for fast30% and prevent set attr.
+#     def __init__(self):
+#         self._from = 1
+#         self._to = 1
+#         self._time = 0
 
-class Event:
-    __slots__ = ['_from','_to']#for fast30% and prevent set attr.
-    def __init__(self):
-        self._from = 1
-        self._to = 1
-
-class Event_key(Event):
-    def __init__(self, key,state,mods):
-        super().__init__()#so this shall be one time only. max depth=2.
-        self.key = key
-        self.state = state
-        self.mods = mods
+# class Event_key(Event):
+#     def __init__(self, key,state,mods):
+#         super().__init__()#so this shall be one time only. max depth=2. or put attrs.
+#         self.key = key
+#         self.state = state
+#         self.mods = mods
     #what about not overwrite init but ..how? we cant.
     #just init with no init.
+
+#1stway
+
+
+class Event:
+    __slots__ = ['to', 'time', 'etype', 'edata' ]#for fast30% and prevent set attr.
+    def __init__(self, etype,edata):
+        #self.from = 1
+        self.to = 1
+        self.time = 0
+        self.etype = etype
+        self.edata = edata
+    def __repr__(self):
+        return f"Event {self.etype}, {self.edata}"
+    
+
+edata = ('A',False,'CTRL')#better not split.
+e = Event('key', edata)
+print(e)
+
+
+t = timef()
+for i in range(1000000):
+    e = Event('key', edata)
+    if e.edata[0] == 'END':1
+print(timef()-t)
+#0.20971430000000002
+
+class Event:
+    __slots__ = ['to', 'time', 'etype', 'edata' ]#for fast30% and prevent set attr.
+    def __init__(self, etype,edata):
+        #self.from = 1
+        self.to = 1
+        self.time = 0
+        self.etype = etype
+        self.edata = edata
+    def __repr__(self):
+        return f"Event {self.etype}, {self.edata}"
+
+edata = {'key':'A','state':False,'mod':'CTRL'}
+
+t = timef()
+for i in range(1000000):
+    e = Event('key', edata)
+    if e.edata['key'] == 'END':1
+print(timef()-t)
+
+#0.2531207
+#0.2637472999999999
+#use dict.
+
+
+#final form
+class Event:
+    __slots__ = ['to', 'time', 'type', 'dict' ]#for fast30% and prevent set attr.
+    def __init__(self, type,dict):
+        #self.from = 1
+        self.to = 1
+        self.time = 0
+        self.type = type
+        self.dict = dict
+    def __repr__(self):
+        return f"Event {self.type}, {self.dict}"
+
+print('____-')
+e=Event('key',{'key':'A','state':False,'mods':'CTRL'})
+print(e)
+exit()
 
 
 from vector import Vec3, parseV3, Vectuple#vec3 as vector
