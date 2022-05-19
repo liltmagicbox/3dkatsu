@@ -94,9 +94,14 @@ def etest():
 
 keymap = {
 	'CTRL+A':'F',	
-	'A':'-0.5*fire',
-	'F': 'fire'
+	'A':'-0.5*fire',#with value
+	'F': 'fire'#instant
 }
+
+#1.keyboard input callback key,value,mod -> (key-key-mapper)-> E or ('mod+key',value)
+#2. match. if mod+key match, 'CTRL+F' vs ('CTRL+F',-0.8) #None if not value.
+#3.func type: A:func(self), B:func(self,value), if value..
+
 
 #Event( type = "key", data = (key, value) )
 

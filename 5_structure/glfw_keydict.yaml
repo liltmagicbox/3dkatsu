@@ -2,7 +2,7 @@
 #python ready also. BACKSLASH only remaind.
 #ESC, CTRL and PAGEDOWN and DELETE
 {
-32 : " " , #youwanna doit??
+32 : "SPACE" ,
 39 : "'"  ,     #/* ' */,
 44 : ","  ,     #/* , */,
 45 : "-"  ,     #/* - */,
