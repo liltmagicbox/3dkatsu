@@ -1,7 +1,76 @@
-#_ removed all area. since _ will be seperator.
-#python ready also. BACKSLASH only remaind.
-#ESC, CTRL and PAGEDOWN and DELETE
-{
+class InputCaster:
+    def __init__(self):
+        self.list = []
+        self.targets = []
+    def bind(self, inputdevice):
+        """def bind_callback in inputdevice."""
+        inputdevice.bind_callback(self)
+        #self.dict = inputdevice.keymap
+        self.targets.append(inputdevice)
+    def input(self, abskey, value, name,UUID):
+        e = (abskey, value, name,UUID)
+        self.list.append(e)
+        # if abskey == 'F' and value == 1:
+        #     print('ff')
+        #     self.dict[abskey]()
+
+    def cast(self):
+        for target in self.targets:
+            keys = list(target.keymap)
+            for i in self.list:
+                abskey = i[0]
+                if abskey in keys:
+                    funcs = target.keymap.get(abskey)
+                    funcs()
+                    #if hasattr(target, funcs):
+                    #    func = getattr(target, funcs)
+                    #    func()
+        #print('cast: ',i)
+        self.list=[]
+
+
+
+
+
+
+
+
+
+
+
+
+#==============================================
+
+#more abskeys for glfw:
+"""
+M_BUTTON_
+M_SCROLL
+CURSOR_POS
+CURSOR_ENTER
+FILEDROP
+WINDOW_POS
+"""
+
+map_mods = {
+    0: "",
+    1: "SHIFT",
+    2: "CTRL",
+    4: "ALT",
+    
+    3: "CTRL+SHIFT",
+    5: "ALT+SHIFT",
+    6: "CTRL+ALT",
+    7: "CTRL+ALT+SHIFT",
+    8: "SUPER",#not that want..
+}
+
+map_mouse = {
+    0: "M_LEFT",
+    1: "M_RIGHT",
+    2: "M_MIDDLE",
+}
+
+map_keyboard = {
 32 : "SPACE" ,
 39 : "'"  ,     #/* ' */,
 44 : ","  ,     #/* , */,

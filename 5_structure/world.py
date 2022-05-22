@@ -41,3 +41,30 @@ class World:
             1
 w=World()
 
+class World:
+    def __init__(self):
+        self.actors = []
+    def update(self,dt)
+
+
+#renderer
+
+EI()
+
+#for window
+for world in worlds:
+    world.update(dt)
+
+draw()
+
+#====
+input()
+update()
+draw()
+
+Events
+input()
+update()
+ physics()
+draw()
+

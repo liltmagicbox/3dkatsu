@@ -1,0 +1,29 @@
+attrs:
+  dt: 0.016666666666666666
+  init_size:
+  - 640
+  - 480
+glDisable:
+- GL_LINE_SMOOTH
+glEnable:
+- GL_DEPTH_TEST
+- GL_MULTISAMPLE
+gles31: false
+gles31_glfwWindowHint:
+  GLFW_CONTEXT_VERSION_MAJOR: 3
+  GLFW_CONTEXT_VERSION_MINOR: 1
+  GLFW_OPENGL_FORWARD_COMPAT: 0
+  GLFW_OPENGL_PROFILE: 0
+glfwWindowHint:
+  GLFW_CENTER_CURSOR: 1
+  GLFW_DECORATED: 1
+  GLFW_DOUBLEBUFFER: 1
+  GLFW_FLOATING: 1
+  GLFW_FOCUSED: 1
+  GLFW_MAXIMIZED: 0
+  GLFW_RESIZABLE: 0
+  GLFW_SAMPLES: 4
+  GLFW_TRANSPARENT_FRAMEBUFFER: 1
+ifgles31shader: "#version 300 es \nprecision highp float;"
+xxfunc:
+- glfw_fullscreen
