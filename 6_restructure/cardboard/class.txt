@@ -1,0 +1,11 @@
+class Man
++age
+-run
+
+(Man)
+class Superman
++power
+-fly
+
+
+

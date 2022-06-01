@@ -33,6 +33,8 @@ class KeyEvent(Event):
 
 
 #===================================================
+WINSIZE = 1200,800
+CARDSIZE = (150,200)
 
 class Card_basic:
     #def __init__(self, width=100,height=100):
@@ -43,6 +45,7 @@ class Card_basic:
         
         self._image = None
         self._color = '#fb0'
+        self.text = 'innertext'
     #===api
     # @property
     # def width(self):
@@ -64,15 +67,15 @@ class Card_basic:
     #-----------
     def set_image(self, imgdir):
         self._image = imgdir
-
+        
 
 class Card_board(Card_basic):
-    def __init__(self, pos=(0,0), size=(50,50) ):
+    def __init__(self, pos=(0,0), size=CARDSIZE ):
+        super().__init__(size)
         #x,y = pos
         self._pos = pos
         #width,height = size
         #super().__init__(width,height)
-        super().__init__(size)
         #self._x = x
         #self._y = y
         self._floating=False        
@@ -114,6 +117,8 @@ class Card_board(Card_basic):
             return True
         return False
 
+
+
 class Card_tk(Card_board):
     def draw(self,canvas):
         x,y = self.pos
@@ -124,8 +129,7 @@ class Card_tk(Card_board):
             x-w, y-h, x+w, y+h,
             outline="#fb0",
             fill = self.color)
-
-        text = canvas.create_text((x,y), text="Label tea\nfasdfxt")        
+        text = canvas.create_text((x,y), text = self.text)#text="Label tea\nfasdfxt")        
         #bbox = canvas.bbox(text)#(-17, 43, 37, 58)
         #print(bbox)
         # rectangle=canvas.create_rectangle(x-w, y-h, x+w, y+h,
@@ -197,14 +201,17 @@ class Board_tk(ItemHolder):
     def bind(self, parent):
         self.canvas = Canvas(parent, bg=self.color)
         self.canvas.pack(side=RIGHT, fill=BOTH, expand=YES)
-        initx,inity = 50,50
         for item in self.items:
-            if item.pos == (0,0):
-                item.pos = initx,inity
-                initx,inity = initx+50,inity+10
-            item.draw(self.canvas)
+            self.bind_item(item)
 
         self.bind_callback()
+    
+    def bind_item(self,item):
+        initx,inity = 50,50
+        if item.pos == (0,0):
+            item.pos = initx,inity
+            initx,inity = initx+50,inity+10
+        item.draw(self.canvas)
 
     def grab(self,item):
         item.lift()
@@ -237,6 +244,7 @@ class Board_tk(ItemHolder):
                 x1=x+ww
                 y1=y+hh
                 self.canvas.coords(item.rectangle, x0, y0, x1, y1)
+                #self.canvas.move(self.rectangle, self.x, self.y)
                 #self.canvas.coords(item.text, 200,200)
                 self.canvas.coords(item.text, x,y)
                 
@@ -257,24 +265,56 @@ from tkinter import filedialog
 import os
 from textframe import TextFrame
 
+
+#'class Man\n+age\n-run\n\nclass'
+def textparser(textline):
+    blocks = []
+    
+    texter = ''
+    for line in textline.split('\n'):
+        if line=='':
+            blocks.append(texter)
+            texter = ''
+        else:
+            texter+=line
+            texter+='\n'
+    return blocks
+
 class Window(Tk):
     #https://www.pythontutorial.net/tkinter/tkinter-toplevel/
     def __init__(self):
         super().__init__()
-        self.geometry("640x480+100+300")
-        self.title('Main Window')        
-    def bind(self):
+        w,h =WINSIZE        
+        self.geometry(f"{w}x{h}+100+100")
+        self.title('Main Window')
+        self.texts = []
+    def make(self):
         self.bind_textf()
         self.bind_menu()
         self.bind_board()
+        self.create_cards()
+
 
     def bind_board(self):
         b=Board_tk()
-        for i in range(5):
-            c=Card()
-            b.add(c)
         b.bind(self)
         self.board = b
+        
+    def create_cards(self):
+        #print(dir(self.textf.text))
+        textline = self.textf.text.get(1.0, END)
+        #print(textline=='\n')
+        texts = textparser(textline)
+
+        for text in texts:
+            print(text,'haahah')
+            if not text in self.texts:
+                self.texts.append(text)
+                c=Card()
+                c.text = text
+                self.board.add(c)
+                self.board.bind_item(c)
+
 
     def bind_textf(self):
         textf = TextFrame(self,LEFT)
@@ -284,20 +324,6 @@ class Window(Tk):
         textf = self.textf
         menu = Menu(self)
         self.config(menu=menu)
-        def callback_save(e=None):
-            fdir = filedialog.asksaveasfilename(
-                initialdir = os.getcwd(),
-                title = "save",
-                filetypes = ( ("txt file", "*.txt"),("all files", "*.*") )
-                )
-            textf.save(fdir)
-        def callback_open(e=None):
-            fdir = filedialog.askopenfilename(
-                initialdir = os.getcwd(),
-                title = "open",
-                filetypes = ( ("txt file", "*.txt"),("all files", "*.*") )
-                )
-            textf.load(fdir)
 
         filemenu = Menu(menu)
         menu.add_cascade(label="File", menu=filemenu, underline=0)
@@ -305,7 +331,29 @@ class Window(Tk):
         filemenu.add_command(label="Save", command=callback_save, underline=0)
         filemenu.add_separator()
 
+def callback_save(e=None):
+    fdir = filedialog.asksaveasfilename(
+        initialdir = os.getcwd(),
+        title = "save",
+        filetypes = ( ("txt file", "*.txt"),("all files", "*.*") )
+        )
+    if not fdir:
+        return
+    w.textf.save(fdir)
+
+def callback_open(e=None):
+    fdir = filedialog.askopenfilename(
+        initialdir = os.getcwd(),
+        title = "open",
+        filetypes = ( ("txt file", "*.txt"),("all files", "*.*") )
+        )
+    if not fdir:
+        return
+    w.textf.load(fdir)
+    w.create_cards()
 
 w=Window()
-w.bind()
+w.make()
+w.bind('<Control-s>', callback_save)
+w.bind('<Control-o>', callback_open)
 w.mainloop()
